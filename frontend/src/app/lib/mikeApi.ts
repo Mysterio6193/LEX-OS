@@ -9,6 +9,7 @@ import type {
     Chat,
     ChatDetailOut,
     CitationAnnotation,
+    Client,
     Document,
     Folder,
     Message,
@@ -299,6 +300,7 @@ export async function updateProject(
     payload: {
         name?: string;
         cm_number?: string;
+        client_id?: string | null;
         shared_with?: string[];
     },
 ): Promise<Project> {
@@ -311,6 +313,38 @@ export async function updateProject(
 
 export async function deleteProject(projectId: string): Promise<void> {
     await apiRequest(`/projects/${projectId}`, { method: "DELETE" });
+}
+
+// Clients
+
+export async function listClients(): Promise<Client[]> {
+    return apiRequest<Client[]>("/clients");
+}
+
+export async function createClient(body: {
+    name: string;
+    notes?: string;
+}): Promise<Client> {
+    return apiRequest<Client>("/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateClient(
+    clientId: string,
+    body: { name?: string; notes?: string | null },
+): Promise<Client> {
+    return apiRequest<Client>(`/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function deleteClient(clientId: string): Promise<void> {
+    await apiRequest(`/clients/${clientId}`, { method: "DELETE" });
 }
 
 export interface ProjectPeople {

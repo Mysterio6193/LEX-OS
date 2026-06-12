@@ -68,6 +68,27 @@ create index if not exists idx_user_api_keys_user
 alter table public.user_api_keys enable row level security;
 
 -- ---------------------------------------------------------------------------
+-- Clients
+-- ---------------------------------------------------------------------------
+--
+-- Per-client profiles (PRD CLM-01/CLM-02). Each user maintains clients with
+-- free-form preference notes; projects link to a client via
+-- projects.client_id (added below) and the client profile is injected into
+-- linked project chats.
+
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  name text not null,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_clients_user
+  on public.clients(user_id);
+
+-- ---------------------------------------------------------------------------
 -- Projects and documents
 -- ---------------------------------------------------------------------------
 
@@ -87,6 +108,13 @@ create index if not exists idx_projects_user
 
 create index if not exists projects_shared_with_idx
   on public.projects using gin (shared_with);
+
+alter table public.projects
+  add column if not exists client_id uuid
+  references public.clients(id) on delete set null;
+
+create index if not exists idx_projects_client
+  on public.projects(client_id);
 
 create table if not exists public.project_subfolders (
   id uuid primary key default gen_random_uuid(),
@@ -432,6 +460,7 @@ create index if not exists tabular_review_chat_messages_chat_idx
 -- roles direct table privileges for backend-owned data.
 
 revoke all on public.user_profiles from anon, authenticated;
+revoke all on public.clients from anon, authenticated;
 revoke all on public.projects from anon, authenticated;
 revoke all on public.project_subfolders from anon, authenticated;
 revoke all on public.documents from anon, authenticated;

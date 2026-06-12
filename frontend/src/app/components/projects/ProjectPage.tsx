@@ -1145,6 +1145,8 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     async function handleProjectDetailsSave(values: {
         name: string;
         cmNumber: string;
+        clientId: string | null;
+        clientName: string | null;
     }) {
         if (project && project.is_owner === false) {
             setOwnerOnlyAction("edit project details");
@@ -1156,6 +1158,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
         const updated = await updateProject(projectId, {
             name,
             cm_number: cmNumber,
+            client_id: values.clientId,
         });
         setProject((prev) =>
             prev
@@ -1163,6 +1166,15 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                       ...prev,
                       name: updated.name,
                       cm_number: updated.cm_number,
+                      client_id: updated.client_id ?? null,
+                      client:
+                          updated.client ??
+                          (values.clientId && values.clientName
+                              ? {
+                                    id: values.clientId,
+                                    name: values.clientName,
+                                }
+                              : null),
                       updated_at: updated.updated_at,
                   }
                 : prev,

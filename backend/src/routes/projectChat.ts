@@ -21,6 +21,7 @@ import {
 import { checkProjectAccess } from "../lib/access";
 import { buildMemoryPromptBlock } from "../lib/projectMemory";
 import { buildDeadlinePromptBlock } from "../lib/projectDeadlines";
+import { buildClientPromptBlock } from "../lib/clients";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
@@ -138,10 +139,12 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     // knows which docs the user is highlighting *now*, distinct from
     // the broader project doc list.
     let systemPromptExtra = `${PROJECT_SYSTEM_PROMPT_EXTRA}\n\nTODAY'S DATE: ${new Date().toISOString().slice(0, 10)}`;
-    const [memoryBlock, deadlineBlock] = await Promise.all([
+    const [clientBlock, memoryBlock, deadlineBlock] = await Promise.all([
+        buildClientPromptBlock(projectId, db),
         buildMemoryPromptBlock(projectId, db),
         buildDeadlinePromptBlock(projectId, db),
     ]);
+    if (clientBlock) systemPromptExtra += `\n\n${clientBlock}`;
     if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
     if (deadlineBlock) systemPromptExtra += `\n\n${deadlineBlock}`;
     if (attached_documents?.length) {

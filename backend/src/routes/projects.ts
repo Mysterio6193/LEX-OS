@@ -99,6 +99,25 @@ async function attachDocumentOwnerLabels(
   }
 }
 
+/**
+ * Resolve a project's linked client to {id, name} for API responses. The
+ * lookup is by id only (no user_id scope) so shared project members can see
+ * which client the matter is for even though the client record belongs to
+ * the project owner.
+ */
+async function loadProjectClient(
+  db: ReturnType<typeof createServerSupabase>,
+  clientId: unknown,
+): Promise<{ id: string; name: string } | null> {
+  if (typeof clientId !== "string" || !clientId) return null;
+  const { data } = await db
+    .from("clients")
+    .select("id, name")
+    .eq("id", clientId)
+    .single();
+  return (data as { id: string; name: string } | null) ?? null;
+}
+
 // GET /projects
 projectsRouter.get("/", requireAuth, async (req, res) => {
   const userId = res.locals.userId as string;
@@ -238,6 +257,7 @@ projectsRouter.get("/:projectId", requireAuth, async (req, res) => {
   res.json({
     ...project,
     is_owner: project.user_id === userId,
+    client: await loadProjectClient(db, project.client_id),
     documents: docsTyped,
     folders: folderData ?? [],
   });
@@ -339,6 +359,23 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
   const updates: Record<string, unknown> = {};
   if (req.body.name != null) updates.name = req.body.name;
   if (req.body.cm_number != null) updates.cm_number = req.body.cm_number;
+  if (req.body.client_id !== undefined) {
+    const clientId = req.body.client_id as string | null;
+    if (clientId !== null) {
+      // Only the project owner reaches the update below, so the client
+      // must belong to the same user.
+      const clientDb = createServerSupabase();
+      const { data: client } = await clientDb
+        .from("clients")
+        .select("id")
+        .eq("id", clientId)
+        .eq("user_id", userId)
+        .single();
+      if (!client)
+        return void res.status(400).json({ detail: "Client not found" });
+    }
+    updates.client_id = clientId;
+  }
   if (Array.isArray(req.body.shared_with)) {
     // Normalise: lowercase + dedupe + drop empties.
     const normalizedUserEmail = userEmail?.trim().toLowerCase();
@@ -381,7 +418,12 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
   }[];
   await attachActiveVersionPaths(db, docsTyped);
   await attachDocumentOwnerLabels(db, docsTyped);
-  res.json({ ...data, documents: docsTyped, folders: folderData ?? [] });
+  res.json({
+    ...data,
+    client: await loadProjectClient(db, data.client_id),
+    documents: docsTyped,
+    folders: folderData ?? [],
+  });
 });
 
 // DELETE /projects/:projectId

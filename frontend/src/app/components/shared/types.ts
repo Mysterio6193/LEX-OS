@@ -10,12 +10,25 @@ export interface Folder {
   updated_at: string;
 }
 
+export interface Client {
+  id: string;
+  user_id: string;
+  name: string;
+  notes: string | null;
+  project_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;
   is_owner?: boolean;
   name: string;
   cm_number: string | null;
+  client_id?: string | null;
+  /** Resolved client (id + name) when the project is linked to one. */
+  client?: { id: string; name: string } | null;
   shared_with: string[];
   created_at: string;
   updated_at: string;
