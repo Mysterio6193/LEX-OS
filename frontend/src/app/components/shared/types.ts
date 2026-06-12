@@ -167,6 +167,11 @@ export type AssistantEvent =
       role: string;
     }
   | {
+      type: "task_saved";
+      task_id: string;
+      title: string;
+    }
+  | {
       type: "conflict_check";
       names: string[];
       match_count: number;
@@ -533,6 +538,31 @@ export interface ConflictMatch {
 export interface ConflictCheckResponse {
   queries: { name: string; matches: ConflictMatch[] }[];
   checked_at: string;
+}
+
+// Matter checklists / templates
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  notes: string | null;
+  status: "pending" | "done";
+  position: number;
+  source: "assistant" | "user" | "template";
+  template_id: string | null;
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatterTemplate {
+  id: string;
+  name: string;
+  description: string;
+  task_count: number;
+  tasks: string[];
 }
 
 // Matter timeline

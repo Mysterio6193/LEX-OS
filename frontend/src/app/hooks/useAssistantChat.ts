@@ -612,6 +612,15 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "task_saved") {
+              pushEvent({
+                type: "task_saved",
+                task_id: data.task_id as string,
+                title: data.title as string,
+              });
+              continue;
+            }
+
             if (data.type === "conflict_check") {
               pushEvent({
                 type: "conflict_check",

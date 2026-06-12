@@ -42,6 +42,7 @@ import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 import { saveProjectDeadline } from "./projectDeadlines";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
+import { saveProjectTask } from "./projectTasks";
 
 const STANDARD_FONT_DATA_URL = (() => {
   try {
@@ -315,6 +316,30 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["name", "role"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_task",
+      description:
+        "Add an action item to this matter's checklist. Every future conversation in this project will see pending tasks, and they appear in the project's Checklist tab. Use it when the conversation establishes concrete work to be done (e.g. 'we still need to get the board resolution', 'prepare a markup of clause 7'). Do NOT save vague intentions, completed work, or items already listed in MATTER CHECKLIST.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description:
+              "Short imperative description of the task (e.g. 'Prepare markup of clause 7').",
+          },
+          notes: {
+            type: "string",
+            description:
+              "Optional context (who asked for it, what it depends on).",
+          },
+        },
+        required: ["title"],
       },
     },
   },
@@ -2084,6 +2109,11 @@ export type DeadlineSavedResult = {
   due_date: string;
 };
 
+export type TaskSavedResult = {
+  task_id: string;
+  title: string;
+};
+
 export type PartySavedResult = {
   party_id: string;
   name: string;
@@ -2435,6 +2465,7 @@ export async function runToolCalls(
   deadlinesSaved: DeadlineSavedResult[];
   partiesSaved: PartySavedResult[];
   conflictChecks: ConflictCheckResultEvent[];
+  tasksSaved: TaskSavedResult[];
   indiankanoonEvents: IndiankanoonToolEvent[];
   caseCitationEvents: CaseCitationEvent[];
 }> {
@@ -2453,6 +2484,7 @@ export async function runToolCalls(
   const deadlinesSaved: DeadlineSavedResult[] = [];
   const partiesSaved: PartySavedResult[] = [];
   const conflictChecks: ConflictCheckResultEvent[] = [];
+  const tasksSaved: TaskSavedResult[] = [];
   const indiankanoonEvents: IndiankanoonToolEvent[] = [];
   const caseCitationEvents: CaseCitationEvent[] = [];
   const courtState: IndiankanoonTurnState =
@@ -2694,6 +2726,48 @@ export async function runToolCalls(
           content: JSON.stringify(
             saved.ok
               ? { ok: true, deadline_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_task") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error:
+              "Matter checklists are only available inside project chats.",
+          }),
+        });
+      } else {
+        const title = String(args.title ?? "").trim();
+        const saved = await saveProjectTask({
+          projectId,
+          userId,
+          title,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: TaskSavedResult = {
+            task_id: saved.id,
+            title,
+          };
+          tasksSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "task_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, task_id: saved.id }
               : { ok: false, error: saved.error },
           ),
         });
@@ -3936,6 +4010,7 @@ export async function runToolCalls(
     deadlinesSaved,
     partiesSaved,
     conflictChecks,
+    tasksSaved,
     indiankanoonEvents,
     caseCitationEvents,
   };
@@ -4158,6 +4233,7 @@ type AssistantEvent =
       due_date: string;
     }
   | { type: "party_saved"; party_id: string; name: string; role: string }
+  | { type: "task_saved"; task_id: string; title: string }
   | {
       type: "conflict_check";
       names: string[];
@@ -4472,6 +4548,7 @@ export async function runLLMStream(params: {
           deadlinesSaved,
           partiesSaved,
           conflictChecks,
+          tasksSaved,
           indiankanoonEvents,
           caseCitationEvents,
         } = await runToolCalls(
@@ -4561,6 +4638,13 @@ export async function runLLMStream(params: {
             names: c.names,
             match_count: c.match_count,
             conflict_count: c.conflict_count,
+          });
+        }
+        for (const t of tasksSaved) {
+          events.push({
+            type: "task_saved",
+            task_id: t.task_id,
+            title: t.title,
           });
         }
         for (const e of docsEdited) {

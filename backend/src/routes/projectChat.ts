@@ -22,6 +22,7 @@ import { checkProjectAccess } from "../lib/access";
 import { buildMemoryPromptBlock } from "../lib/projectMemory";
 import { buildDeadlinePromptBlock } from "../lib/projectDeadlines";
 import { buildPartyPromptBlock } from "../lib/projectParties";
+import { buildTaskPromptBlock } from "../lib/projectTasks";
 import { buildClientPromptBlock } from "../lib/clients";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
@@ -44,6 +45,9 @@ This project also has a deadline tracker that every future chat will see. When t
 
 RECORDING PARTIES:
 This project also tracks the parties connected to the matter. When the conversation establishes who is involved (e.g. "the counterparty is Acme GmbH", "we act for Northwind Ltd", "opposing counsel is Baker & Co"), call save_party with the name and role — once per distinct entity. Do not record parties already listed in MATTER PARTIES. Do not announce that you recorded a party; the UI shows it automatically.
+
+MATTER CHECKLIST:
+This project also has a task checklist that every future chat will see. When the conversation establishes concrete work to be done (e.g. "we still need the board resolution", "prepare a markup of clause 7"), call save_task with a short imperative title — once per distinct item. Do not save vague intentions, completed work, or items already listed in MATTER CHECKLIST. Do not announce that you saved a task; the UI shows it automatically.
 
 CONFLICT CHECKS:
 When the user introduces a new prospective client, counterparty, or adverse party and asks about conflicts (or asks to "run a conflict check"), call check_conflicts with the entity names. Report potential conflicts plainly: name the matter and the role the entity plays there, and recommend that a lawyer review any potential conflict before engagement. Never declare a name cleared of conflicts — the check covers only this user's recorded matters, parties, and clients.`;
@@ -149,17 +153,19 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     // knows which docs the user is highlighting *now*, distinct from
     // the broader project doc list.
     let systemPromptExtra = `${PROJECT_SYSTEM_PROMPT_EXTRA}\n\nTODAY'S DATE: ${new Date().toISOString().slice(0, 10)}`;
-    const [clientBlock, memoryBlock, deadlineBlock, partyBlock] =
+    const [clientBlock, memoryBlock, deadlineBlock, partyBlock, taskBlock] =
         await Promise.all([
             buildClientPromptBlock(projectId, db),
             buildMemoryPromptBlock(projectId, db),
             buildDeadlinePromptBlock(projectId, db),
             buildPartyPromptBlock(projectId, db),
+            buildTaskPromptBlock(projectId, db),
         ]);
     if (clientBlock) systemPromptExtra += `\n\n${clientBlock}`;
     if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
     if (deadlineBlock) systemPromptExtra += `\n\n${deadlineBlock}`;
     if (partyBlock) systemPromptExtra += `\n\n${partyBlock}`;
+    if (taskBlock) systemPromptExtra += `\n\n${taskBlock}`;
     if (attached_documents?.length) {
         const slugByDocumentId = new Map<string, string>();
         for (const [slug, info] of Object.entries(docIndex)) {

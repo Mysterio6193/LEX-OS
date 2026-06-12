@@ -17,7 +17,9 @@ import type {
     Project,
     ProjectDeadline,
     ProjectMemory,
+    MatterTemplate,
     ProjectParty,
+    ProjectTask,
     TimelineResponse,
     Workflow,
     TabularReview,
@@ -556,6 +558,70 @@ export async function getProjectTimeline(
     const qs = params.toString();
     return apiRequest<TimelineResponse>(
         `/projects/${projectId}/timeline${qs ? `?${qs}` : ""}`,
+    );
+}
+
+export async function listProjectTasks(
+    projectId: string,
+): Promise<ProjectTask[]> {
+    return apiRequest<ProjectTask[]>(`/projects/${projectId}/tasks`);
+}
+
+export async function createProjectTask(
+    projectId: string,
+    body: { title: string; notes?: string },
+): Promise<ProjectTask> {
+    return apiRequest<ProjectTask>(`/projects/${projectId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectTask(
+    projectId: string,
+    taskId: string,
+    body: {
+        title?: string;
+        notes?: string | null;
+        status?: ProjectTask["status"];
+        position?: number;
+    },
+): Promise<ProjectTask> {
+    return apiRequest<ProjectTask>(
+        `/projects/${projectId}/tasks/${taskId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectTask(
+    projectId: string,
+    taskId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/tasks/${taskId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listMatterTemplates(): Promise<MatterTemplate[]> {
+    return apiRequest<MatterTemplate[]>(`/matter-templates`);
+}
+
+export async function applyMatterTemplate(
+    projectId: string,
+    templateId: string,
+): Promise<{ added: number; tasks: ProjectTask[] }> {
+    return apiRequest<{ added: number; tasks: ProjectTask[] }>(
+        `/projects/${projectId}/tasks/apply-template`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template_id: templateId }),
+        },
     );
 }
 
