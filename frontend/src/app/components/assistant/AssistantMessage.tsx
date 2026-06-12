@@ -864,6 +864,31 @@ function WorkflowAppliedBlock({
     );
 }
 
+function MemorySavedBlock({
+    kind,
+    content,
+    showConnector,
+}: {
+    kind: string;
+    content: string;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">
+                    Saved {kind === "fact" ? "fact" : kind} to matter memory
+                </span>{" "}
+                <span>{content}</span>
+            </div>
+        </div>
+    );
+}
+
 type IndianKanoonBlockItem = {
     caseName: string | null;
     citation: string | null;
@@ -2010,6 +2035,16 @@ export function AssistantMessage({
                             ? () => onWorkflowClick(event.workflow_id)
                             : undefined
                     }
+                />
+            );
+        }
+        if (event.type === "memory_saved") {
+            return (
+                <MemorySavedBlock
+                    key={globalIdx}
+                    kind={event.kind}
+                    content={event.content}
+                    showConnector={showConnector}
                 />
             );
         }

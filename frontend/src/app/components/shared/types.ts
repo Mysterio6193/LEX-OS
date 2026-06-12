@@ -134,6 +134,12 @@ export type AssistantEvent =
     }
   | { type: "workflow_applied"; workflow_id: string; title: string }
   | {
+      type: "memory_saved";
+      memory_id: string;
+      kind: string;
+      content: string;
+    }
+  | {
       type: "doc_edited";
       filename: string;
       document_id: string;
@@ -425,6 +431,22 @@ export interface TabularCell {
   } | null;
   status: "pending" | "generating" | "done" | "error";
   created_at: string;
+}
+
+// Matter Memory
+
+export type ProjectMemoryKind = "decision" | "fact" | "preference";
+
+export interface ProjectMemory {
+  id: string;
+  project_id: string;
+  user_id: string;
+  kind: ProjectMemoryKind;
+  content: string;
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Workflows

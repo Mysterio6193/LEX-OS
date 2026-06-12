@@ -13,6 +13,7 @@ import type {
     Folder,
     Message,
     Project,
+    ProjectMemory,
     Workflow,
     TabularReview,
     TabularReviewDetailOut,
@@ -346,6 +347,47 @@ export async function createProjectFolder(
             name,
             parent_folder_id: parentFolderId ?? null,
         }),
+    });
+}
+
+export async function listProjectMemories(
+    projectId: string,
+): Promise<ProjectMemory[]> {
+    return apiRequest<ProjectMemory[]>(`/projects/${projectId}/memory`);
+}
+
+export async function createProjectMemory(
+    projectId: string,
+    body: { kind: ProjectMemory["kind"]; content: string },
+): Promise<ProjectMemory> {
+    return apiRequest<ProjectMemory>(`/projects/${projectId}/memory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectMemory(
+    projectId: string,
+    memoryId: string,
+    body: { kind?: ProjectMemory["kind"]; content?: string },
+): Promise<ProjectMemory> {
+    return apiRequest<ProjectMemory>(
+        `/projects/${projectId}/memory/${memoryId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectMemory(
+    projectId: string,
+    memoryId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/memory/${memoryId}`, {
+        method: "DELETE",
     });
 }
 

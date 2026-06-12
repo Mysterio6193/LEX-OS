@@ -582,6 +582,16 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "memory_saved") {
+              pushEvent({
+                type: "memory_saved",
+                memory_id: data.memory_id as string,
+                kind: data.kind as string,
+                content: data.content as string,
+              });
+              continue;
+            }
+
             if (data.type === "case_citation") {
               pushEvent({
                 type: "case_citation",

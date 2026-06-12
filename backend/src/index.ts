@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import { chatRouter } from "./routes/chat";
 import { projectsRouter } from "./routes/projects";
 import { projectChatRouter } from "./routes/projectChat";
+import { projectMemoryRouter } from "./routes/projectMemory";
 import { documentsRouter } from "./routes/documents";
 import { tabularRouter } from "./routes/tabular";
 import { workflowsRouter } from "./routes/workflows";
@@ -148,6 +149,7 @@ app.use((req, res, next) =>
 app.use("/chat", chatRouter);
 app.use("/projects", projectsRouter);
 app.use("/projects/:projectId/chat", projectChatRouter);
+app.use("/projects/:projectId/memory", projectMemoryRouter);
 app.use("/single-documents", documentsRouter);
 app.use("/tabular-review", tabularRouter);
 app.use("/workflows", workflowsRouter);

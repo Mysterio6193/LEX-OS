@@ -87,6 +87,7 @@ import { DocumentSidePanel } from "./DocumentSidePanel";
 import { ProjectDetailsModal } from "./ProjectDetailsModal";
 import { ProjectAssistantTab } from "./ProjectAssistantTab";
 import { ProjectReviewsTab } from "./ProjectReviewsTab";
+import { ProjectMemoryTab } from "./ProjectMemoryTab";
 
 interface Props {
     projectId: string;
@@ -271,7 +272,9 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     const searchParams = useSearchParams();
     const tabParam = searchParams.get("tab");
     const tab: ProjectTab =
-        tabParam === "assistant" || tabParam === "reviews"
+        tabParam === "assistant" ||
+        tabParam === "reviews" ||
+        tabParam === "memory"
             ? tabParam
             : initialTab;
     const [addDocsOpen, setAddDocsOpen] = useState(false);
@@ -2534,6 +2537,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                     { id: "documents", label: "Documents" },
                     { id: "assistant", label: "Assistant Chats" },
                     { id: "reviews", label: "Tabular Reviews" },
+                    { id: "memory", label: "Memory" },
                 ]}
                 active={tab}
                 onChange={handleTabChange}
@@ -3345,6 +3349,14 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                             setSelectedReviewIds={setSelectedReviewIds}
                             setRenamingReviewId={setRenamingReviewId}
                             setRenameReviewValue={setRenameReviewValue}
+                        />
+                    )}
+
+                    {/* Tab: Memory */}
+                    {tab === "memory" && (
+                        <ProjectMemoryTab
+                            projectId={projectId}
+                            search={search}
                         />
                     )}
                         </>

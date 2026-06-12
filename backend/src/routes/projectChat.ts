@@ -19,6 +19,7 @@ import {
     getUserModelSettings,
 } from "../lib/userSettings";
 import { checkProjectAccess } from "../lib/access";
+import { buildMemoryPromptBlock } from "../lib/projectMemory";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
@@ -27,7 +28,10 @@ You are operating within a project folder that contains a collection of legal do
 A document may currently be displayed in the user's side panel; when provided, treat it as context for the user's likely focus, but do NOT assume it is the only or definitive document the user is asking about. If the request could apply to other files in the project, identify and read those as well. Prefer coverage across the relevant project documents over an over-narrow reading of only the displayed one.
 
 REPLICATING A DOCUMENT:
-When the user wants to use an existing project document as a starting point for a new file (e.g. "use this NDA as a template", "make me a copy of the SOW so I can edit it", "duplicate this and adapt it for company X"), call the replicate_document tool with the source doc_id. This creates a byte-for-byte copy as a new project document, returns a fresh doc_id slug, and shows a download/open card in the UI. Then call edit_document on the returned slug to make the user's requested changes — do NOT call generate_docx for cases where the user clearly wants the existing document's structure and formatting preserved.`;
+When the user wants to use an existing project document as a starting point for a new file (e.g. "use this NDA as a template", "make me a copy of the SOW so I can edit it", "duplicate this and adapt it for company X"), call the replicate_document tool with the source doc_id. This creates a byte-for-byte copy as a new project document, returns a fresh doc_id slug, and shows a download/open card in the UI. Then call edit_document on the returned slug to make the user's requested changes — do NOT call generate_docx for cases where the user clearly wants the existing document's structure and formatting preserved.
+
+SAVING TO MATTER MEMORY:
+This project has a persistent memory that every future chat in the project will see. When the user makes a clear decision (e.g. "we accept the 12-month liability cap"), states a durable fact about the matter (e.g. "the counterparty is governed by German law"), or expresses a lasting preference (e.g. "always draft indemnities aggressively for this client"), call save_memory to record it — once per distinct item, phrased as one or two self-contained sentences. Do not save transient context, speculation, document summaries, or anything already listed in MATTER MEMORY. Do not announce that you saved a memory; the UI shows it automatically.`;
 
 export const projectChatRouter = Router({ mergeParams: true });
 
@@ -130,6 +134,8 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     // knows which docs the user is highlighting *now*, distinct from
     // the broader project doc list.
     let systemPromptExtra = PROJECT_SYSTEM_PROMPT_EXTRA;
+    const memoryBlock = await buildMemoryPromptBlock(projectId, db);
+    if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
     if (attached_documents?.length) {
         const slugByDocumentId = new Map<string, string>();
         for (const [slug, info] of Object.entries(docIndex)) {
@@ -187,6 +193,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
             apiKeys,
             signal: streamAbort.signal,
             projectId,
+            chatId,
         });
 
         const persistedEvents = stripTransientAssistantEvents(events);

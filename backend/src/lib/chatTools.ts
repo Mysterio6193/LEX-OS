@@ -38,6 +38,7 @@ import {
   type OpenAIToolSchema,
 } from "./llm";
 import { safeErrorMessage } from "./safeError";
+import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 
 const STANDARD_FONT_DATA_URL = (() => {
   try {
@@ -229,6 +230,31 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["doc_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_memory",
+      description:
+        "Save an important decision, fact, or preference to this matter's persistent memory. Memory survives across chats: every future conversation in this project will see saved entries. Use it when the user makes a clear decision (e.g. 'we accept the 12-month liability cap'), states a durable fact about the matter (e.g. 'the counterparty is governed by German law'), or expresses a lasting preference (e.g. 'always draft indemnities aggressively for this client'). Do NOT save transient context, speculation, document summaries, or anything already in MATTER MEMORY.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["decision", "fact", "preference"],
+            description:
+              "What kind of entry this is: a decision the user made, a durable fact about the matter, or a lasting preference.",
+          },
+          content: {
+            type: "string",
+            description:
+              "The entry to remember, written as one or two self-contained sentences understandable without this conversation's context.",
+          },
+        },
+        required: ["kind", "content"],
       },
     },
   },
@@ -1967,6 +1993,12 @@ export type DocCreatedResult = {
   version_number?: number | null;
 };
 
+export type MemorySavedResult = {
+  memory_id: string;
+  kind: string;
+  content: string;
+};
+
 export type DocReplicatedResult = {
   /** Filename of the source document being copied. */
   filename: string;
@@ -2292,6 +2324,7 @@ export async function runToolCalls(
   projectId?: string | null,
   indiankanoonState?: IndiankanoonTurnState,
   apiKeys?: import("./llm").UserApiKeys,
+  chatId?: string | null,
 ): Promise<{
   toolResults: unknown[];
   docsRead: { filename: string; document_id?: string }[];
@@ -2300,6 +2333,7 @@ export async function runToolCalls(
   docsReplicated: DocReplicatedResult[];
   workflowsApplied: { workflow_id: string; title: string }[];
   docsEdited: DocEditedResult[];
+  memoriesSaved: MemorySavedResult[];
   indiankanoonEvents: IndiankanoonToolEvent[];
   caseCitationEvents: CaseCitationEvent[];
 }> {
@@ -2314,6 +2348,7 @@ export async function runToolCalls(
   const docsReplicated: DocReplicatedResult[] = [];
   const workflowsApplied: { workflow_id: string; title: string }[] = [];
   const docsEdited: DocEditedResult[] = [];
+  const memoriesSaved: MemorySavedResult[] = [];
   const indiankanoonEvents: IndiankanoonToolEvent[] = [];
   const caseCitationEvents: CaseCitationEvent[] = [];
   const courtState: IndiankanoonTurnState =
@@ -2473,6 +2508,48 @@ export async function runToolCalls(
         tool_call_id: tc.id,
         content: wf ? wf.prompt_md : `Workflow '${wfId}' not found.`,
       });
+    } else if (tc.function.name === "save_memory") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Matter memory is only available inside project chats.",
+          }),
+        });
+      } else {
+        const kind = normalizeMemoryKind(args.kind);
+        const saved = await saveProjectMemory({
+          projectId,
+          userId,
+          kind,
+          content: String(args.content ?? ""),
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: MemorySavedResult = {
+            memory_id: saved.id,
+            kind,
+            content: String(args.content ?? "").trim(),
+          };
+          memoriesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "memory_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, memory_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
     } else if (tc.function.name === "read_table_cells" && tabularStore) {
       const colIndices = args.col_indices as number[] | undefined;
       const rowIndices = args.row_indices as number[] | undefined;
@@ -3615,6 +3692,7 @@ export async function runToolCalls(
     docsReplicated,
     workflowsApplied,
     docsEdited,
+    memoriesSaved,
     indiankanoonEvents,
     caseCitationEvents,
   };
@@ -3829,6 +3907,7 @@ type AssistantEvent =
       }[];
     }
   | { type: "workflow_applied"; workflow_id: string; title: string }
+  | { type: "memory_saved"; memory_id: string; kind: string; content: string }
   | {
       type: "doc_edited";
       filename: string;
@@ -3900,6 +3979,8 @@ export async function runLLMStream(params: {
    * generated docs still get persisted, but as standalone documents.
    */
   projectId?: string | null;
+  /** Chat the turn belongs to; recorded as the source of saved memories. */
+  chatId?: string | null;
 }): Promise<{
   fullText: string;
   events: AssistantEvent[];
@@ -3921,6 +4002,7 @@ export async function runLLMStream(params: {
     apiKeys,
     signal,
     projectId,
+    chatId,
   } = params;
   const researchTools = includeResearchTools ? INDIANKANOON_TOOLS : [];
   const baseTools = [...TOOLS, ...researchTools, ...WORKFLOW_TOOLS];
@@ -4127,6 +4209,7 @@ export async function runLLMStream(params: {
           docsReplicated,
           workflowsApplied,
           docsEdited,
+          memoriesSaved,
           indiankanoonEvents,
           caseCitationEvents,
         } = await runToolCalls(
@@ -4142,6 +4225,7 @@ export async function runLLMStream(params: {
           projectId,
         indiankanoonTurnState,
         apiKeys,
+        chatId,
       );
         throwIfAborted(signal);
         for (const r of docsRead) {
@@ -4182,6 +4266,14 @@ export async function runLLMStream(params: {
             type: "workflow_applied",
             workflow_id: wf.workflow_id,
             title: wf.title,
+          });
+        }
+        for (const m of memoriesSaved) {
+          events.push({
+            type: "memory_saved",
+            memory_id: m.memory_id,
+            kind: m.kind,
+            content: m.content,
           });
         }
         for (const e of docsEdited) {

@@ -245,12 +245,14 @@ export async function buildUserAccountExport(
     const documentIds = idsFrom(documents);
     const reviewIds = idsFrom(tabularReviews);
 
-    const [folders, versions, edits, tabularCells] = await Promise.all([
-        selectByIds(db, "project_subfolders", "project_id", projectIds),
-        selectByIds(db, "document_versions", "document_id", documentIds),
-        selectByIds(db, "document_edits", "document_id", documentIds),
-        selectByIds(db, "tabular_cells", "review_id", reviewIds),
-    ]);
+    const [folders, versions, edits, tabularCells, projectMemories] =
+        await Promise.all([
+            selectByIds(db, "project_subfolders", "project_id", projectIds),
+            selectByIds(db, "document_versions", "document_id", documentIds),
+            selectByIds(db, "document_edits", "document_id", documentIds),
+            selectByIds(db, "tabular_cells", "review_id", reviewIds),
+            selectByIds(db, "project_memories", "project_id", projectIds),
+        ]);
 
     return {
         exported_at: new Date().toISOString(),
@@ -259,6 +261,7 @@ export async function buildUserAccountExport(
         api_keys: apiKeys,
         projects,
         project_subfolders: folders,
+        project_memories: projectMemories,
         documents,
         document_versions: versions,
         document_edits: edits,
