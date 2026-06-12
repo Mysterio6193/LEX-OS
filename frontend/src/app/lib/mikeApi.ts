@@ -18,6 +18,7 @@ import type {
     ProjectDeadline,
     ProjectMemory,
     ProjectParty,
+    TimelineResponse,
     Workflow,
     TabularReview,
     TabularReviewDetailOut,
@@ -543,6 +544,19 @@ export async function runConflictCheck(body: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
+}
+
+export async function getProjectTimeline(
+    projectId: string,
+    opts?: { before?: string; limit?: number },
+): Promise<TimelineResponse> {
+    const params = new URLSearchParams();
+    if (opts?.before) params.set("before", opts.before);
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return apiRequest<TimelineResponse>(
+        `/projects/${projectId}/timeline${qs ? `?${qs}` : ""}`,
+    );
 }
 
 export async function renameProjectFolder(

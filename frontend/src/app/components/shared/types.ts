@@ -535,6 +535,30 @@ export interface ConflictCheckResponse {
   checked_at: string;
 }
 
+// Matter timeline
+
+export type TimelineEventType =
+  | "document_created"
+  | "document_version"
+  | "chat_created"
+  | "memory_saved"
+  | "deadline_created"
+  | "party_added";
+
+export interface TimelineEvent {
+  id: string;
+  type: TimelineEventType;
+  at: string;
+  title: string;
+  detail?: string;
+  refs?: { document_id?: string; chat_id?: string; version_id?: string };
+}
+
+export interface TimelineResponse {
+  events: TimelineEvent[];
+  next_before: string | null;
+}
+
 // Workflows
 
 export interface Workflow {
