@@ -137,7 +137,20 @@ For updating existing deployments, run the incremental migration files sequentia
 
 ---
 
-## 6. Indian Kanoon Integration
+## 6. Persistent Memory Layer
+
+**lexOS** implements the PRD's Layer 1 memory architecture inside every project (matter) workspace:
+
+1. **Matter Memory** — the assistant saves key decisions, facts, and preferences via its `save_memory` tool; entries persist across chat sessions, are injected into every project chat's context, and are curated in the project's **Memory** tab.
+2. **Matter Deadlines** — date-bound obligations are captured via the `save_deadline` tool (or manually in the **Deadlines** tab), tracked with overdue flags, and surfaced to the assistant in every chat.
+3. **Client Memory** — link a matter to a client from **Project Details**; the client's preference notes plus preference memories saved across *all* of that client's matters are applied in every linked chat.
+4. **Precedent Library** — mark any document as a firm precedent (row menu → *Mark as precedent*); precedents from other matters become readable, citable drafting templates in every project chat.
+
+For existing deployments, apply the corresponding migrations from [backend/oss-migrations/](backend/oss-migrations) (`20260612_project_memories.sql`, `20260612_project_deadlines.sql`, `20260612_clients.sql`, `20260612_precedents.sql`). Fresh databases get all of this from `schema.sql`.
+
+---
+
+## 7. Indian Kanoon Integration
 
 **lexOS** features dedicated tools to research Indian case law, retrieve judgements, and verify citations natively using the Indian Kanoon API:
 1. **Case Search:** Run semantic query searches against Indian judgements, tribunals, and laws.
@@ -148,15 +161,15 @@ Configure the provider key in `backend/.env` (using `INDIANKANOON_API_TOKEN`) or
 
 ---
 
-## 7. Installation & Running
+## 8. Installation & Running
 
-### 7.1 Install Dependencies
+### 8.1 Install Dependencies
 ```bash
 npm install --prefix backend
 npm install --prefix frontend
 ```
 
-### 7.2 Run Development Servers
+### 8.2 Run Development Servers
 Start backend:
 ```bash
 npm run dev --prefix backend
@@ -169,7 +182,7 @@ npm run dev --prefix frontend
 
 Open your browser at `http://localhost:3000`.
 
-### 7.3 Build for Production
+### 8.3 Build for Production
 ```bash
 # Build backend TypeScript
 npm run build --prefix backend
