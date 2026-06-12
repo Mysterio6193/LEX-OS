@@ -708,6 +708,45 @@ projectsRouter.patch("/:projectId/documents/:documentId", requireAuth, async (re
   });
 });
 
+// PATCH /projects/:projectId/documents/:documentId/precedent — mark or
+// unmark a document as a firm precedent. Owner-of-doc only: precedents are
+// loaded into all of that user's project chats, so shared members may not
+// publish someone else's document into their own precedent library.
+projectsRouter.patch(
+  "/:projectId/documents/:documentId/precedent",
+  requireAuth,
+  async (req, res) => {
+    const userId = res.locals.userId as string;
+    const userEmail = res.locals.userEmail as string | undefined;
+    const { projectId, documentId } = req.params;
+    const isPrecedent = req.body?.is_precedent;
+    if (typeof isPrecedent !== "boolean")
+      return void res
+        .status(400)
+        .json({ detail: "is_precedent must be a boolean" });
+    const db = createServerSupabase();
+
+    const access = await checkProjectAccess(projectId, userId, userEmail, db);
+    if (!access.ok)
+      return void res.status(404).json({ detail: "Project not found" });
+
+    const { data: updated, error } = await db
+      .from("documents")
+      .update({
+        is_precedent: isPrecedent,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId)
+      .eq("project_id", projectId)
+      .eq("user_id", userId)
+      .select("id, is_precedent")
+      .single();
+    if (error || !updated)
+      return void res.status(404).json({ detail: "Document not found" });
+    res.json(updated);
+  },
+);
+
 // POST /projects/:projectId/documents
 projectsRouter.post(
   "/:projectId/documents",

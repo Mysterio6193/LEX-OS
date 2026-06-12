@@ -135,9 +135,14 @@ create table if not exists public.documents (
   user_id text not null,
   status text not null default 'pending',
   folder_id uuid references public.project_subfolders(id) on delete set null,
+  is_precedent boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists idx_documents_precedent
+  on public.documents(user_id)
+  where is_precedent;
 
 create index if not exists idx_documents_user_project
   on public.documents(user_id, project_id);

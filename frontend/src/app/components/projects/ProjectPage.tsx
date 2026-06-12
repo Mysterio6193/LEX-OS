@@ -32,6 +32,7 @@ import {
     moveDocumentToFolder,
     moveSubfolderToFolder,
     renameProjectDocument,
+    setDocumentPrecedent,
     listDocumentVersions,
     uploadDocumentVersion,
     replaceDocumentVersionFile,
@@ -1428,6 +1429,36 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
         return !!(doc?.user_id && user?.id && doc.user_id !== user.id);
     }
 
+    async function handleTogglePrecedent(doc: Document) {
+        const next = !doc.is_precedent;
+        setProject((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      documents: (prev.documents ?? []).map((d) =>
+                          d.id === doc.id ? { ...d, is_precedent: next } : d,
+                      ),
+                  }
+                : prev,
+        );
+        try {
+            await setDocumentPrecedent(projectId, doc.id, next);
+        } catch {
+            setProject((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          documents: (prev.documents ?? []).map((d) =>
+                              d.id === doc.id
+                                  ? { ...d, is_precedent: doc.is_precedent }
+                                  : d,
+                          ),
+                      }
+                    : prev,
+            );
+        }
+    }
+
     async function handleDropProjectFiles(files: File[]) {
         if (files.length === 0) return;
         const { supported, unsupported } =
@@ -1923,6 +1954,11 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                             {docName}
                                                         </span>
                                                     )}
+                                                    {doc.is_precedent && (
+                                                        <span className="inline-flex shrink-0 items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                                                            Precedent
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="ml-auto w-20 shrink-0 text-xs text-gray-500 uppercase truncate">
@@ -2025,6 +2061,19 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                                           doc.id,
                                                                       )
                                                                 : undefined
+                                                        }
+                                                        onTogglePrecedent={
+                                                            !isSharedDocument(
+                                                                doc,
+                                                            )
+                                                                ? () =>
+                                                                      void handleTogglePrecedent(
+                                                                          doc,
+                                                                      )
+                                                                : undefined
+                                                        }
+                                                        isPrecedent={
+                                                            !!doc.is_precedent
                                                         }
                                                         onDelete={() =>
                                                             requestRemoveDoc(
@@ -3229,6 +3278,19 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                                           menuDoc.id,
                                                                       )
                                                                 : undefined
+                                                        }
+                                                        onTogglePrecedent={
+                                                            !isSharedDocument(
+                                                                menuDoc,
+                                                            )
+                                                                ? () =>
+                                                                      void handleTogglePrecedent(
+                                                                          menuDoc,
+                                                                      )
+                                                                : undefined
+                                                        }
+                                                        isPrecedent={
+                                                            !!menuDoc.is_precedent
                                                         }
                                                         onDelete={() =>
                                                             requestRemoveDoc(

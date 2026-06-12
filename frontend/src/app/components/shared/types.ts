@@ -53,6 +53,8 @@ export interface Document {
   size_bytes: number | null;
   page_count: number | null;
   structure_tree: StructureNode[] | null;
+  /** Firm precedent: available to the assistant in all the owner's project chats. */
+  is_precedent?: boolean;
   status: "pending" | "processing" | "ready" | "error";
   created_at: string | null;
   updated_at?: string | null;

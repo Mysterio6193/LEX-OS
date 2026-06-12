@@ -315,6 +315,21 @@ export async function deleteProject(projectId: string): Promise<void> {
     await apiRequest(`/projects/${projectId}`, { method: "DELETE" });
 }
 
+export async function setDocumentPrecedent(
+    projectId: string,
+    documentId: string,
+    isPrecedent: boolean,
+): Promise<{ id: string; is_precedent: boolean }> {
+    return apiRequest<{ id: string; is_precedent: boolean }>(
+        `/projects/${projectId}/documents/${documentId}/precedent`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_precedent: isPrecedent }),
+        },
+    );
+}
+
 // Clients
 
 export async function listClients(): Promise<Client[]> {

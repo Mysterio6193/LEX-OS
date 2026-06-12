@@ -4583,9 +4583,12 @@ export async function buildDocContext(
   return { docIndex, docStore };
 }
 
+/** Folder-path label that marks precedent docs from other matters. */
+export const PRECEDENT_LIBRARY_PATH = "Precedent Library";
+
 export async function buildProjectDocContext(
   projectId: string,
-  _userId: string,
+  userId: string,
   db: ReturnType<typeof createServerSupabase>,
 ): Promise<{
   docIndex: DocIndex;
@@ -4662,6 +4665,49 @@ export async function buildProjectDocContext(
     });
     const path = resolvePath(doc.folder_id ?? null);
     if (path) folderPaths.set(docLabel, path);
+  }
+
+  // Precedent Library (PRD FM-02): the user's precedent documents from
+  // OTHER matters ride along in every project chat so the assistant can
+  // read, cite, and replicate them as drafting templates. Docs in this
+  // project are already listed above and are excluded to avoid duplicates.
+  const { data: precedents } = await db
+    .from("documents")
+    .select("id, current_version_id, status, project_id")
+    .eq("user_id", userId)
+    .eq("is_precedent", true)
+    .eq("status", "ready")
+    .order("created_at", { ascending: true });
+  const precedentList = (
+    (precedents ?? []) as unknown as {
+      id: string;
+      filename?: string | null;
+      file_type?: string | null;
+      current_version_id?: string | null;
+      active_version_number?: number | null;
+      project_id?: string | null;
+      storage_path?: string | null;
+    }[]
+  ).filter((doc) => doc.project_id !== projectId);
+  await attachActiveVersionPaths(db, precedentList);
+  let nextIndex = docList.length;
+  for (const doc of precedentList) {
+    if (!doc.storage_path) continue;
+    const docLabel = `doc-${nextIndex}`;
+    nextIndex += 1;
+    const filename = doc.filename?.trim() || "Untitled document";
+    docIndex[docLabel] = {
+      document_id: doc.id,
+      filename,
+      version_id: doc.current_version_id ?? null,
+      version_number: doc.active_version_number ?? null,
+    };
+    docStore.set(docLabel, {
+      storage_path: doc.storage_path,
+      file_type: doc.file_type ?? "",
+      filename,
+    });
+    folderPaths.set(docLabel, PRECEDENT_LIBRARY_PATH);
   }
 
   devLog(
