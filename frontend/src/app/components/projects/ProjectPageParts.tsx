@@ -2,6 +2,8 @@
 
 import { type CSSProperties, useRef, useState } from "react";
 import {
+    Archive,
+    Copy,
     CornerDownRight,
     File,
     FileText,
@@ -372,6 +374,8 @@ export function ProjectPageHeader({
     onOwnerOnly,
     onOpenDetails,
     onDeleteProject,
+    onCloneProject,
+    onToggleArchive,
     onSearchChange,
     onOpenPeople,
     onNewChat,
@@ -387,6 +391,8 @@ export function ProjectPageHeader({
     onOwnerOnly: (action: string) => void;
     onOpenDetails: () => void;
     onDeleteProject: () => void;
+    onCloneProject: () => void;
+    onToggleArchive: () => void;
     onSearchChange: (search: string) => void;
     onOpenPeople: () => void;
     onNewChat: () => void;
@@ -461,6 +467,18 @@ export function ProjectPageHeader({
                                         label: "Project Details",
                                         icon: Info,
                                         onSelect: onOpenDetails,
+                                    },
+                                    {
+                                        label: "Clone matter",
+                                        icon: Copy,
+                                        onSelect: onCloneProject,
+                                    },
+                                    {
+                                        label: project?.archived_at
+                                            ? "Unarchive"
+                                            : "Archive",
+                                        icon: Archive,
+                                        onSelect: onToggleArchive,
                                     },
                                     {
                                         label: "Delete",

@@ -116,6 +116,10 @@ alter table public.projects
 create index if not exists idx_projects_client
   on public.projects(client_id);
 
+-- Matter archival (PRD CM-10): set = archived (hidden from default lists).
+alter table public.projects
+  add column if not exists archived_at timestamptz;
+
 create table if not exists public.project_subfolders (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,

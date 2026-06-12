@@ -167,8 +167,23 @@ async function toApiError(response: Response, path: string) {
 // Projects
 // ---------------------------------------------------------------------------
 
-export async function listProjects(): Promise<Project[]> {
-    return apiRequest<Project[]>("/projects");
+export async function listProjects(
+    includeArchived = false,
+): Promise<Project[]> {
+    return apiRequest<Project[]>(
+        includeArchived ? "/projects?include_archived=true" : "/projects",
+    );
+}
+
+export async function cloneProject(
+    projectId: string,
+    name?: string,
+): Promise<Project> {
+    return apiRequest<Project>(`/projects/${projectId}/clone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(name ? { name } : {}),
+    });
 }
 
 export async function createProject(
@@ -307,6 +322,7 @@ export async function updateProject(
         cm_number?: string;
         client_id?: string | null;
         shared_with?: string[];
+        archived?: boolean;
     },
 ): Promise<Project> {
     return apiRequest<Project>(`/projects/${projectId}`, {

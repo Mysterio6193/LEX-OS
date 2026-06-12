@@ -17,6 +17,7 @@ import {
     deleteProject,
     deleteDocument,
     createTabularReview,
+    cloneProject,
     updateProject,
     listProjectChats,
     deleteChat,
@@ -291,6 +292,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
     const [addDocsOpen, setAddDocsOpen] = useState(false);
     const [peopleModalOpen, setPeopleModalOpen] = useState(false);
     const [projectDetailsOpen, setProjectDetailsOpen] = useState(false);
+    const [cloningProject, setCloningProject] = useState(false);
     const [ownerOnlyAction, setOwnerOnlyAction] = useState<string | null>(null);
     const { user } = useAuth();
     const { profile } = useUserProfile();
@@ -1197,6 +1199,41 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
         }
         setDeleteProjectStatus("idle");
         setDeleteProjectConfirmOpen(true);
+    }
+
+    async function handleCloneProject() {
+        if (!project || cloningProject) return;
+        setCloningProject(true);
+        try {
+            const created = await cloneProject(projectId);
+            router.push(`/projects/${created.id}`);
+        } catch {
+            setCloningProject(false);
+        }
+    }
+
+    async function handleToggleArchive() {
+        if (!project) return;
+        if (project.is_owner === false) {
+            setOwnerOnlyAction("archive this project");
+            return;
+        }
+        const archived = !project.archived_at;
+        try {
+            const updated = await updateProject(projectId, { archived });
+            setProject((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          archived_at:
+                              updated.archived_at ??
+                              (archived ? new Date().toISOString() : null),
+                      }
+                    : prev,
+            );
+        } catch {
+            /* leave state unchanged on failure */
+        }
     }
 
     async function confirmProjectDelete() {
@@ -2597,6 +2634,8 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                 onOwnerOnly={setOwnerOnlyAction}
                 onOpenDetails={() => setProjectDetailsOpen(true)}
                 onDeleteProject={requestProjectDelete}
+                onCloneProject={() => void handleCloneProject()}
+                onToggleArchive={() => void handleToggleArchive()}
                 onSearchChange={setSearch}
                 onOpenPeople={() => setPeopleModalOpen(true)}
                 onNewChat={handleNewChat}

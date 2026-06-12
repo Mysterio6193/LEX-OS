@@ -30,6 +30,7 @@ export interface Project {
   /** Resolved client (id + name) when the project is linked to one. */
   client?: { id: string; name: string } | null;
   shared_with: string[];
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
   documents?: Document[];

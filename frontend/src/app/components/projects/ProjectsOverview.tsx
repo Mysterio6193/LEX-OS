@@ -20,7 +20,7 @@ function formatDate(iso: string) {
     });
 }
 
-type Tab = "all" | "mine" | "shared-with-me";
+type Tab = "all" | "mine" | "shared-with-me" | "archived";
 
 const NAME_COL_W = "w-[332px] shrink-0";
 
@@ -58,7 +58,7 @@ export function ProjectsOverview() {
         let cancelled = false;
         setLoading(true);
         setLoadError(null);
-        listProjects()
+        listProjects(true)
             .then((loaded) => {
                 if (!cancelled) setProjects(loaded);
             })
@@ -95,12 +95,17 @@ export function ProjectsOverview() {
     }, [actionsOpen]);
 
     const q = search.toLowerCase();
+    const active = projects.filter((p) => !p.archived_at);
     const filtered = (
         activeTab === "all"
-            ? projects
+            ? active
             : activeTab === "mine"
-              ? projects.filter((p) => p.is_owner ?? p.user_id === user?.id)
-              : projects.filter((p) => !(p.is_owner ?? p.user_id === user?.id))
+              ? active.filter((p) => p.is_owner ?? p.user_id === user?.id)
+              : activeTab === "shared-with-me"
+                ? active.filter(
+                      (p) => !(p.is_owner ?? p.user_id === user?.id),
+                  )
+                : projects.filter((p) => !!p.archived_at)
     ).filter(
         (p) =>
             !q ||
@@ -132,6 +137,7 @@ export function ProjectsOverview() {
         { id: "all", label: "All" },
         { id: "mine", label: "Mine" },
         { id: "shared-with-me", label: "Shared with me" },
+        { id: "archived", label: "Archived" },
     ];
 
     async function handleRenameSubmit(projectId: string) {

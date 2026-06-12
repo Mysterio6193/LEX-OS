@@ -122,22 +122,31 @@ async function loadProjectClient(
 projectsRouter.get("/", requireAuth, async (req, res) => {
   const userId = res.locals.userId as string;
   const userEmail = res.locals.userEmail as string;
+  // Archived matters are hidden unless explicitly requested (CM-10).
+  const includeArchived = req.query.include_archived === "true";
   const db = createServerSupabase();
 
-  const { data: ownProjects, error: ownError } = await db
+  let ownQuery = db
     .from("projects")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
+  if (!includeArchived) ownQuery = ownQuery.is("archived_at", null);
+  const { data: ownProjects, error: ownError } = await ownQuery;
   if (ownError) return void res.status(500).json({ detail: ownError.message });
 
-  const { data: sharedProjects, error: sharedError } = userEmail
-    ? await db
+  let sharedQuery = userEmail
+    ? db
         .from("projects")
         .select("*")
         .filter("shared_with", "cs", JSON.stringify([userEmail]))
         .neq("user_id", userId)
         .order("created_at", { ascending: false })
+    : null;
+  if (sharedQuery && !includeArchived)
+    sharedQuery = sharedQuery.is("archived_at", null);
+  const { data: sharedProjects, error: sharedError } = sharedQuery
+    ? await sharedQuery
     : { data: [], error: null };
   if (sharedError)
     return void res.status(500).json({ detail: sharedError.message });
@@ -217,6 +226,119 @@ projectsRouter.post("/", requireAuth, async (req, res) => {
     .single();
   if (error) return void res.status(500).json({ detail: error.message });
   res.status(201).json({ ...data, documents: [] });
+});
+
+// POST /projects/:projectId/clone — start a new matter from an existing
+// one (CM-08). Copies the matter's knowledge — parties, checklist tasks
+// (reset to pending), and durable memories (facts/preferences, not
+// matter-specific decisions) plus the client link — into a fresh project
+// owned by the caller. Documents and chats are NOT copied.
+projectsRouter.post("/:projectId/clone", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const userEmail = res.locals.userEmail as string | undefined;
+  const { projectId } = req.params;
+  const { name } = req.body as { name?: string };
+  const db = createServerSupabase();
+
+  const access = await checkProjectAccess(projectId, userId, userEmail, db);
+  if (!access.ok)
+    return void res.status(404).json({ detail: "Project not found" });
+
+  const { data: source } = await db
+    .from("projects")
+    .select("id, name, client_id")
+    .eq("id", projectId)
+    .single();
+  if (!source)
+    return void res.status(404).json({ detail: "Project not found" });
+
+  // The client link only carries over when the client belongs to the
+  // caller (a shared member cloning someone else's matter gets no link).
+  let clientId: string | null = null;
+  if (source.client_id) {
+    const { data: client } = await db
+      .from("clients")
+      .select("id")
+      .eq("id", source.client_id)
+      .eq("user_id", userId)
+      .single();
+    clientId = client ? (source.client_id as string) : null;
+  }
+
+  const newName =
+    typeof name === "string" && name.trim()
+      ? name.trim()
+      : `${source.name} (copy)`;
+  const { data: created, error: createError } = await db
+    .from("projects")
+    .insert({
+      user_id: userId,
+      name: newName.slice(0, 300),
+      cm_number: null,
+      shared_with: [],
+      client_id: clientId,
+    })
+    .select("*")
+    .single();
+  if (createError || !created)
+    return void res.status(500).json({ detail: "Failed to clone project" });
+  const newProjectId = created.id as string;
+
+  const [{ data: parties }, { data: tasks }, { data: memories }] =
+    await Promise.all([
+      db
+        .from("project_parties")
+        .select("name, role, notes, source")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true }),
+      db
+        .from("project_tasks")
+        .select("title, notes, position, source, template_id")
+        .eq("project_id", projectId)
+        .order("position", { ascending: true }),
+      db
+        .from("project_memories")
+        .select("kind, content, source")
+        .eq("project_id", projectId)
+        .in("kind", ["fact", "preference"])
+        .order("created_at", { ascending: true }),
+    ]);
+
+  if (parties?.length) {
+    await db.from("project_parties").insert(
+      parties.map((p) => ({
+        ...p,
+        project_id: newProjectId,
+        user_id: userId,
+      })),
+    );
+  }
+  if (tasks?.length) {
+    await db.from("project_tasks").insert(
+      tasks.map((t) => ({
+        ...t,
+        status: "pending",
+        project_id: newProjectId,
+        user_id: userId,
+      })),
+    );
+  }
+  if (memories?.length) {
+    await db.from("project_memories").insert(
+      memories.map((m) => ({
+        ...m,
+        project_id: newProjectId,
+        user_id: userId,
+      })),
+    );
+  }
+
+  res.status(201).json({
+    ...created,
+    is_owner: true,
+    documents: [],
+    folders: [],
+  });
 });
 
 // GET /projects/:projectId
@@ -394,6 +516,11 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
       cleaned.push(e);
     }
     updates.shared_with = cleaned;
+  }
+  if (typeof req.body.archived === "boolean") {
+    updates.archived_at = req.body.archived
+      ? new Date().toISOString()
+      : null;
   }
 
   const db = createServerSupabase();
