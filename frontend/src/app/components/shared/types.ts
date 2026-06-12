@@ -161,6 +161,18 @@ export type AssistantEvent =
       due_date: string;
     }
   | {
+      type: "party_saved";
+      party_id: string;
+      name: string;
+      role: string;
+    }
+  | {
+      type: "conflict_check";
+      names: string[];
+      match_count: number;
+      conflict_count: number;
+    }
+  | {
       type: "doc_edited";
       filename: string;
       document_id: string;
@@ -484,6 +496,43 @@ export interface ProjectDeadline {
   source_chat_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Matter Parties / conflict checking
+
+export type ProjectPartyRole =
+  | "client"
+  | "counterparty"
+  | "opposing_counsel"
+  | "witness"
+  | "other";
+
+export interface ProjectParty {
+  id: string;
+  project_id: string;
+  user_id: string;
+  name: string;
+  role: ProjectPartyRole;
+  notes: string | null;
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConflictMatch {
+  matched_name: string;
+  match_kind: "client" | "party";
+  role: string | null;
+  match_strength: "exact" | "strong" | "partial";
+  severity: "potential_conflict" | "related_match";
+  project: { id: string; name: string } | null;
+  client: { id: string; name: string } | null;
+}
+
+export interface ConflictCheckResponse {
+  queries: { name: string; matches: ConflictMatch[] }[];
+  checked_at: string;
 }
 
 // Workflows

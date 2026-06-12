@@ -24,7 +24,8 @@ export type ProjectTab =
     | "assistant"
     | "reviews"
     | "memory"
-    | "deadlines";
+    | "deadlines"
+    | "parties";
 
 export type ProjectContextMenu = {
     x: number;

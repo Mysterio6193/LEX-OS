@@ -256,6 +256,7 @@ export async function buildUserAccountExport(
         tabularCells,
         projectMemories,
         projectDeadlines,
+        projectParties,
     ] = await Promise.all([
         selectByIds(db, "project_subfolders", "project_id", projectIds),
         selectByIds(db, "document_versions", "document_id", documentIds),
@@ -263,6 +264,7 @@ export async function buildUserAccountExport(
         selectByIds(db, "tabular_cells", "review_id", reviewIds),
         selectByIds(db, "project_memories", "project_id", projectIds),
         selectByIds(db, "project_deadlines", "project_id", projectIds),
+        selectByIds(db, "project_parties", "project_id", projectIds),
     ]);
 
     return {
@@ -275,6 +277,7 @@ export async function buildUserAccountExport(
         project_subfolders: folders,
         project_memories: projectMemories,
         project_deadlines: projectDeadlines,
+        project_parties: projectParties,
         documents,
         document_versions: versions,
         document_edits: edits,

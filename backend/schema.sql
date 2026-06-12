@@ -384,6 +384,32 @@ create index if not exists idx_project_deadlines_project
   on public.project_deadlines(project_id, due_date);
 
 -- ---------------------------------------------------------------------------
+-- Matter parties
+-- ---------------------------------------------------------------------------
+--
+-- Conflict checking (PRD CLM-07/WA-09). Each matter records the entities
+-- connected to it; conflict checks match candidate names against the
+-- caller's accessible matters, parties, and clients.
+
+create table if not exists public.project_parties (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  name text not null,
+  role text not null default 'other'
+    check (role in ('client', 'counterparty', 'opposing_counsel', 'witness', 'other')),
+  notes text,
+  source text not null default 'user'
+    check (source in ('assistant', 'user')),
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_parties_project
+  on public.project_parties(project_id);
+
+-- ---------------------------------------------------------------------------
 -- Tabular reviews
 -- ---------------------------------------------------------------------------
 
@@ -478,6 +504,7 @@ revoke all on public.chats from anon, authenticated;
 revoke all on public.chat_messages from anon, authenticated;
 revoke all on public.project_memories from anon, authenticated;
 revoke all on public.project_deadlines from anon, authenticated;
+revoke all on public.project_parties from anon, authenticated;
 revoke all on public.tabular_reviews from anon, authenticated;
 revoke all on public.tabular_cells from anon, authenticated;
 revoke all on public.tabular_review_chats from anon, authenticated;

@@ -13,9 +13,11 @@ import type {
     Document,
     Folder,
     Message,
+    ConflictCheckResponse,
     Project,
     ProjectDeadline,
     ProjectMemory,
+    ProjectParty,
     Workflow,
     TabularReview,
     TabularReviewDetailOut,
@@ -484,6 +486,62 @@ export async function deleteProjectDeadline(
 ): Promise<void> {
     await apiRequest(`/projects/${projectId}/deadlines/${deadlineId}`, {
         method: "DELETE",
+    });
+}
+
+export async function listProjectParties(
+    projectId: string,
+): Promise<ProjectParty[]> {
+    return apiRequest<ProjectParty[]>(`/projects/${projectId}/parties`);
+}
+
+export async function createProjectParty(
+    projectId: string,
+    body: { name: string; role: ProjectParty["role"]; notes?: string },
+): Promise<ProjectParty> {
+    return apiRequest<ProjectParty>(`/projects/${projectId}/parties`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectParty(
+    projectId: string,
+    partyId: string,
+    body: {
+        name?: string;
+        role?: ProjectParty["role"];
+        notes?: string | null;
+    },
+): Promise<ProjectParty> {
+    return apiRequest<ProjectParty>(
+        `/projects/${projectId}/parties/${partyId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectParty(
+    projectId: string,
+    partyId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/parties/${partyId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function runConflictCheck(body: {
+    names?: string[];
+    project_id?: string;
+}): Promise<ConflictCheckResponse> {
+    return apiRequest<ConflictCheckResponse>(`/conflicts/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
     });
 }
 

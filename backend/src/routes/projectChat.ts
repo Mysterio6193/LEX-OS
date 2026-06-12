@@ -21,6 +21,7 @@ import {
 import { checkProjectAccess } from "../lib/access";
 import { buildMemoryPromptBlock } from "../lib/projectMemory";
 import { buildDeadlinePromptBlock } from "../lib/projectDeadlines";
+import { buildPartyPromptBlock } from "../lib/projectParties";
 import { buildClientPromptBlock } from "../lib/clients";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
@@ -39,7 +40,13 @@ PRECEDENT LIBRARY:
 Documents listed with folder path "Precedent Library" are firm precedents from the user's other matters, not documents of this matter. Use them as reference material and drafting templates: read them for standard language, or call replicate_document to copy one into this project as a starting point (e.g. "draft an NDA based on our standard precedent"). Do not treat precedents as evidence about this matter's facts, and do not edit a precedent directly — always replicate first.
 
 SAVING DEADLINES:
-This project also has a deadline tracker that every future chat will see. When the user mentions a concrete date-bound obligation (e.g. "the filing is due 30 June", "closing is scheduled for 15 July", "respond by next Friday"), call save_deadline with the title and the resolved YYYY-MM-DD date. Resolve relative dates against TODAY'S DATE; if the date is genuinely ambiguous, ask the user instead of guessing. Do not save vague timeframes or deadlines already listed in MATTER DEADLINES. Do not announce that you saved a deadline; the UI shows it automatically.`;
+This project also has a deadline tracker that every future chat will see. When the user mentions a concrete date-bound obligation (e.g. "the filing is due 30 June", "closing is scheduled for 15 July", "respond by next Friday"), call save_deadline with the title and the resolved YYYY-MM-DD date. Resolve relative dates against TODAY'S DATE; if the date is genuinely ambiguous, ask the user instead of guessing. Do not save vague timeframes or deadlines already listed in MATTER DEADLINES. Do not announce that you saved a deadline; the UI shows it automatically.
+
+RECORDING PARTIES:
+This project also tracks the parties connected to the matter. When the conversation establishes who is involved (e.g. "the counterparty is Acme GmbH", "we act for Northwind Ltd", "opposing counsel is Baker & Co"), call save_party with the name and role — once per distinct entity. Do not record parties already listed in MATTER PARTIES. Do not announce that you recorded a party; the UI shows it automatically.
+
+CONFLICT CHECKS:
+When the user introduces a new prospective client, counterparty, or adverse party and asks about conflicts (or asks to "run a conflict check"), call check_conflicts with the entity names. Report potential conflicts plainly: name the matter and the role the entity plays there, and recommend that a lawyer review any potential conflict before engagement. Never declare a name cleared of conflicts — the check covers only this user's recorded matters, parties, and clients.`;
 
 export const projectChatRouter = Router({ mergeParams: true });
 
@@ -142,14 +149,17 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     // knows which docs the user is highlighting *now*, distinct from
     // the broader project doc list.
     let systemPromptExtra = `${PROJECT_SYSTEM_PROMPT_EXTRA}\n\nTODAY'S DATE: ${new Date().toISOString().slice(0, 10)}`;
-    const [clientBlock, memoryBlock, deadlineBlock] = await Promise.all([
-        buildClientPromptBlock(projectId, db),
-        buildMemoryPromptBlock(projectId, db),
-        buildDeadlinePromptBlock(projectId, db),
-    ]);
+    const [clientBlock, memoryBlock, deadlineBlock, partyBlock] =
+        await Promise.all([
+            buildClientPromptBlock(projectId, db),
+            buildMemoryPromptBlock(projectId, db),
+            buildDeadlinePromptBlock(projectId, db),
+            buildPartyPromptBlock(projectId, db),
+        ]);
     if (clientBlock) systemPromptExtra += `\n\n${clientBlock}`;
     if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
     if (deadlineBlock) systemPromptExtra += `\n\n${deadlineBlock}`;
+    if (partyBlock) systemPromptExtra += `\n\n${partyBlock}`;
     if (attached_documents?.length) {
         const slugByDocumentId = new Map<string, string>();
         for (const [slug, info] of Object.entries(docIndex)) {
@@ -208,6 +218,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
             signal: streamAbort.signal,
             projectId,
             chatId,
+            userEmail,
         });
 
         const persistedEvents = stripTransientAssistantEvents(events);

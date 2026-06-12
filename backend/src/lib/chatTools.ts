@@ -40,6 +40,8 @@ import {
 import { safeErrorMessage } from "./safeError";
 import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 import { saveProjectDeadline } from "./projectDeadlines";
+import { PARTY_ROLES, saveProjectParty } from "./projectParties";
+import { runConflictCheck } from "./conflicts";
 
 const STANDARD_FONT_DATA_URL = (() => {
   try {
@@ -284,6 +286,54 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["title", "due_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_party",
+      description:
+        "Record a party connected to this matter (client, counterparty, opposing counsel, witness). Every future conversation in this project will see recorded parties, they appear in the project's Parties tab, and conflict checks match them across all the user's matters. Use it when the conversation establishes who is involved in the matter (e.g. 'the counterparty is Acme GmbH', 'we act for Northwind Ltd'). Do NOT record parties already listed in MATTER PARTIES.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description:
+              "The party's name as commonly written (e.g. 'Acme Holdings Ltd').",
+          },
+          role: {
+            type: "string",
+            enum: [...PARTY_ROLES],
+            description: "The party's role in this matter.",
+          },
+          notes: {
+            type: "string",
+            description:
+              "Optional context (e.g. who they are represented by, their relationship to the client).",
+          },
+        },
+        required: ["name", "role"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "check_conflicts",
+      description:
+        "Run a conflict-of-interest check of one or more entity names against all of the user's matters, recorded parties, and clients. Use when the user asks about conflicts or introduces a new prospective client, counterparty, or adverse party. Returns matches with the role each matched entity plays elsewhere and a severity flag. Report potential conflicts plainly and recommend lawyer review — never declare a name cleared.",
+      parameters: {
+        type: "object",
+        properties: {
+          names: {
+            type: "array",
+            items: { type: "string" },
+            description: "Entity names to check (e.g. ['Acme GmbH']).",
+          },
+        },
+        required: ["names"],
       },
     },
   },
@@ -2034,6 +2084,18 @@ export type DeadlineSavedResult = {
   due_date: string;
 };
 
+export type PartySavedResult = {
+  party_id: string;
+  name: string;
+  role: string;
+};
+
+export type ConflictCheckResultEvent = {
+  names: string[];
+  match_count: number;
+  conflict_count: number;
+};
+
 export type DocReplicatedResult = {
   /** Filename of the source document being copied. */
   filename: string;
@@ -2360,6 +2422,7 @@ export async function runToolCalls(
   indiankanoonState?: IndiankanoonTurnState,
   apiKeys?: import("./llm").UserApiKeys,
   chatId?: string | null,
+  userEmail?: string | null,
 ): Promise<{
   toolResults: unknown[];
   docsRead: { filename: string; document_id?: string }[];
@@ -2370,6 +2433,8 @@ export async function runToolCalls(
   docsEdited: DocEditedResult[];
   memoriesSaved: MemorySavedResult[];
   deadlinesSaved: DeadlineSavedResult[];
+  partiesSaved: PartySavedResult[];
+  conflictChecks: ConflictCheckResultEvent[];
   indiankanoonEvents: IndiankanoonToolEvent[];
   caseCitationEvents: CaseCitationEvent[];
 }> {
@@ -2386,6 +2451,8 @@ export async function runToolCalls(
   const docsEdited: DocEditedResult[] = [];
   const memoriesSaved: MemorySavedResult[] = [];
   const deadlinesSaved: DeadlineSavedResult[] = [];
+  const partiesSaved: PartySavedResult[] = [];
+  const conflictChecks: ConflictCheckResultEvent[] = [];
   const indiankanoonEvents: IndiankanoonToolEvent[] = [];
   const caseCitationEvents: CaseCitationEvent[] = [];
   const courtState: IndiankanoonTurnState =
@@ -2629,6 +2696,98 @@ export async function runToolCalls(
               ? { ok: true, deadline_id: saved.id }
               : { ok: false, error: saved.error },
           ),
+        });
+      }
+    } else if (tc.function.name === "save_party") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Matter parties are only available inside project chats.",
+          }),
+        });
+      } else {
+        const name = String(args.name ?? "").trim();
+        const role = String(args.role ?? "other").trim();
+        const saved = await saveProjectParty({
+          projectId,
+          userId,
+          name,
+          role,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: PartySavedResult = {
+            party_id: saved.id,
+            name,
+            role,
+          };
+          partiesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "party_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, party_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "check_conflicts") {
+      const rawNames = Array.isArray(args.names) ? args.names : [];
+      const names = rawNames
+        .map((n) => String(n ?? "").trim())
+        .filter(Boolean);
+      if (names.length === 0) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Provide at least one name to check.",
+          }),
+        });
+      } else {
+        const result = await runConflictCheck({
+          names,
+          userId,
+          userEmail,
+          excludeProjectId: projectId ?? null,
+          db,
+        });
+        const matchCount = result.queries.reduce(
+          (sum, q) => sum + q.matches.length,
+          0,
+        );
+        const conflictCount = result.queries.reduce(
+          (sum, q) =>
+            sum +
+            q.matches.filter((m) => m.severity === "potential_conflict")
+              .length,
+          0,
+        );
+        const event: ConflictCheckResultEvent = {
+          names,
+          match_count: matchCount,
+          conflict_count: conflictCount,
+        };
+        conflictChecks.push(event);
+        write(
+          `data: ${JSON.stringify({ type: "conflict_check", ...event })}\n\n`,
+        );
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({ ok: true, ...result }),
         });
       }
     } else if (tc.function.name === "read_table_cells" && tabularStore) {
@@ -3775,6 +3934,8 @@ export async function runToolCalls(
     docsEdited,
     memoriesSaved,
     deadlinesSaved,
+    partiesSaved,
+    conflictChecks,
     indiankanoonEvents,
     caseCitationEvents,
   };
@@ -3996,6 +4157,13 @@ type AssistantEvent =
       title: string;
       due_date: string;
     }
+  | { type: "party_saved"; party_id: string; name: string; role: string }
+  | {
+      type: "conflict_check";
+      names: string[];
+      match_count: number;
+      conflict_count: number;
+    }
   | {
       type: "doc_edited";
       filename: string;
@@ -4069,6 +4237,8 @@ export async function runLLMStream(params: {
   projectId?: string | null;
   /** Chat the turn belongs to; recorded as the source of saved memories. */
   chatId?: string | null;
+  /** Caller's email; lets check_conflicts cover matters shared with them. */
+  userEmail?: string | null;
 }): Promise<{
   fullText: string;
   events: AssistantEvent[];
@@ -4091,6 +4261,7 @@ export async function runLLMStream(params: {
     signal,
     projectId,
     chatId,
+    userEmail,
   } = params;
   const researchTools = includeResearchTools ? INDIANKANOON_TOOLS : [];
   const baseTools = [...TOOLS, ...researchTools, ...WORKFLOW_TOOLS];
@@ -4299,6 +4470,8 @@ export async function runLLMStream(params: {
           docsEdited,
           memoriesSaved,
           deadlinesSaved,
+          partiesSaved,
+          conflictChecks,
           indiankanoonEvents,
           caseCitationEvents,
         } = await runToolCalls(
@@ -4315,6 +4488,7 @@ export async function runLLMStream(params: {
         indiankanoonTurnState,
         apiKeys,
         chatId,
+        userEmail,
       );
         throwIfAborted(signal);
         for (const r of docsRead) {
@@ -4371,6 +4545,22 @@ export async function runLLMStream(params: {
             deadline_id: d.deadline_id,
             title: d.title,
             due_date: d.due_date,
+          });
+        }
+        for (const p of partiesSaved) {
+          events.push({
+            type: "party_saved",
+            party_id: p.party_id,
+            name: p.name,
+            role: p.role,
+          });
+        }
+        for (const c of conflictChecks) {
+          events.push({
+            type: "conflict_check",
+            names: c.names,
+            match_count: c.match_count,
+            conflict_count: c.conflict_count,
           });
         }
         for (const e of docsEdited) {

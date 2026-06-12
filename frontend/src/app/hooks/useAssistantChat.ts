@@ -602,6 +602,26 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "party_saved") {
+              pushEvent({
+                type: "party_saved",
+                party_id: data.party_id as string,
+                name: data.name as string,
+                role: data.role as string,
+              });
+              continue;
+            }
+
+            if (data.type === "conflict_check") {
+              pushEvent({
+                type: "conflict_check",
+                names: (data.names as string[]) ?? [],
+                match_count: (data.match_count as number) ?? 0,
+                conflict_count: (data.conflict_count as number) ?? 0,
+              });
+              continue;
+            }
+
             if (data.type === "case_citation") {
               pushEvent({
                 type: "case_citation",
