@@ -93,6 +93,7 @@ import { ProjectDeadlinesTab } from "./ProjectDeadlinesTab";
 import { ProjectPartiesTab } from "./ProjectPartiesTab";
 import { ProjectTimelineTab } from "./ProjectTimelineTab";
 import { ProjectTasksTab } from "./ProjectTasksTab";
+import { ProjectOverviewTab } from "./ProjectOverviewTab";
 
 interface Props {
     projectId: string;
@@ -268,7 +269,7 @@ function ProjectTableLoading({
     );
 }
 
-export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
+export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
     const [project, setProject] = useState<Project | null>(null);
     const [folders, setFolders] = useState<ProjectFolder[]>([]);
     const [chats, setChats] = useState<Chat[]>([]);
@@ -277,6 +278,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     const searchParams = useSearchParams();
     const tabParam = searchParams.get("tab");
     const tab: ProjectTab =
+        tabParam === "documents" ||
         tabParam === "assistant" ||
         tabParam === "reviews" ||
         tabParam === "memory" ||
@@ -618,7 +620,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
 
     function handleTabChange(newTab: ProjectTab) {
         const base = `/projects/${projectId}`;
-        const url = newTab === "documents" ? base : `${base}?tab=${newTab}`;
+        const url = newTab === "overview" ? base : `${base}?tab=${newTab}`;
         router.push(url);
     }
 
@@ -2603,6 +2605,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
 
             <ToolbarTabs
                 tabs={[
+                    { id: "overview", label: "Overview" },
                     { id: "documents", label: "Documents" },
                     { id: "assistant", label: "Assistant Chats" },
                     { id: "reviews", label: "Tabular Reviews" },
@@ -3475,6 +3478,15 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                         <ProjectTasksTab
                             projectId={projectId}
                             search={search}
+                        />
+                    )}
+
+                    {/* Tab: Overview */}
+                    {tab === "overview" && (
+                        <ProjectOverviewTab
+                            projectId={projectId}
+                            project={project}
+                            onNavigate={handleTabChange}
                         />
                     )}
                         </>

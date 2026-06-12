@@ -20,6 +20,7 @@ import { RowActions } from "@/app/components/shared/RowActions";
 import { HeaderActionsMenu } from "@/app/components/shared/HeaderActionsMenu";
 
 export type ProjectTab =
+    | "overview"
     | "documents"
     | "assistant"
     | "reviews"
