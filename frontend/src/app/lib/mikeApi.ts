@@ -13,6 +13,7 @@ import type {
     Folder,
     Message,
     Project,
+    ProjectDeadline,
     ProjectMemory,
     Workflow,
     TabularReview,
@@ -387,6 +388,52 @@ export async function deleteProjectMemory(
     memoryId: string,
 ): Promise<void> {
     await apiRequest(`/projects/${projectId}/memory/${memoryId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listProjectDeadlines(
+    projectId: string,
+): Promise<ProjectDeadline[]> {
+    return apiRequest<ProjectDeadline[]>(`/projects/${projectId}/deadlines`);
+}
+
+export async function createProjectDeadline(
+    projectId: string,
+    body: { title: string; due_date: string; notes?: string },
+): Promise<ProjectDeadline> {
+    return apiRequest<ProjectDeadline>(`/projects/${projectId}/deadlines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectDeadline(
+    projectId: string,
+    deadlineId: string,
+    body: {
+        title?: string;
+        due_date?: string;
+        notes?: string | null;
+        status?: ProjectDeadline["status"];
+    },
+): Promise<ProjectDeadline> {
+    return apiRequest<ProjectDeadline>(
+        `/projects/${projectId}/deadlines/${deadlineId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectDeadline(
+    projectId: string,
+    deadlineId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/deadlines/${deadlineId}`, {
         method: "DELETE",
     });
 }

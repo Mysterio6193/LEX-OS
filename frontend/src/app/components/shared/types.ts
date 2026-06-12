@@ -140,6 +140,12 @@ export type AssistantEvent =
       content: string;
     }
   | {
+      type: "deadline_saved";
+      deadline_id: string;
+      title: string;
+      due_date: string;
+    }
+  | {
       type: "doc_edited";
       filename: string;
       document_id: string;
@@ -443,6 +449,22 @@ export interface ProjectMemory {
   user_id: string;
   kind: ProjectMemoryKind;
   content: string;
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Matter Deadlines
+
+export interface ProjectDeadline {
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  due_date: string;
+  notes: string | null;
+  status: "pending" | "done";
   source: "assistant" | "user";
   source_chat_id: string | null;
   created_at: string;

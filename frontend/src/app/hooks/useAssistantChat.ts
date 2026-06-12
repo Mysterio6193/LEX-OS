@@ -592,6 +592,16 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "deadline_saved") {
+              pushEvent({
+                type: "deadline_saved",
+                deadline_id: data.deadline_id as string,
+                title: data.title as string,
+                due_date: data.due_date as string,
+              });
+              continue;
+            }
+
             if (data.type === "case_citation") {
               pushEvent({
                 type: "case_citation",

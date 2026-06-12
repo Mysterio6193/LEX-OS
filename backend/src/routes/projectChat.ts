@@ -20,6 +20,7 @@ import {
 } from "../lib/userSettings";
 import { checkProjectAccess } from "../lib/access";
 import { buildMemoryPromptBlock } from "../lib/projectMemory";
+import { buildDeadlinePromptBlock } from "../lib/projectDeadlines";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
@@ -31,7 +32,10 @@ REPLICATING A DOCUMENT:
 When the user wants to use an existing project document as a starting point for a new file (e.g. "use this NDA as a template", "make me a copy of the SOW so I can edit it", "duplicate this and adapt it for company X"), call the replicate_document tool with the source doc_id. This creates a byte-for-byte copy as a new project document, returns a fresh doc_id slug, and shows a download/open card in the UI. Then call edit_document on the returned slug to make the user's requested changes — do NOT call generate_docx for cases where the user clearly wants the existing document's structure and formatting preserved.
 
 SAVING TO MATTER MEMORY:
-This project has a persistent memory that every future chat in the project will see. When the user makes a clear decision (e.g. "we accept the 12-month liability cap"), states a durable fact about the matter (e.g. "the counterparty is governed by German law"), or expresses a lasting preference (e.g. "always draft indemnities aggressively for this client"), call save_memory to record it — once per distinct item, phrased as one or two self-contained sentences. Do not save transient context, speculation, document summaries, or anything already listed in MATTER MEMORY. Do not announce that you saved a memory; the UI shows it automatically.`;
+This project has a persistent memory that every future chat in the project will see. When the user makes a clear decision (e.g. "we accept the 12-month liability cap"), states a durable fact about the matter (e.g. "the counterparty is governed by German law"), or expresses a lasting preference (e.g. "always draft indemnities aggressively for this client"), call save_memory to record it — once per distinct item, phrased as one or two self-contained sentences. Do not save transient context, speculation, document summaries, or anything already listed in MATTER MEMORY. Do not announce that you saved a memory; the UI shows it automatically.
+
+SAVING DEADLINES:
+This project also has a deadline tracker that every future chat will see. When the user mentions a concrete date-bound obligation (e.g. "the filing is due 30 June", "closing is scheduled for 15 July", "respond by next Friday"), call save_deadline with the title and the resolved YYYY-MM-DD date. Resolve relative dates against TODAY'S DATE; if the date is genuinely ambiguous, ask the user instead of guessing. Do not save vague timeframes or deadlines already listed in MATTER DEADLINES. Do not announce that you saved a deadline; the UI shows it automatically.`;
 
 export const projectChatRouter = Router({ mergeParams: true });
 
@@ -133,9 +137,13 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     // the system prompt with the current-turn doc_id slugs so the model
     // knows which docs the user is highlighting *now*, distinct from
     // the broader project doc list.
-    let systemPromptExtra = PROJECT_SYSTEM_PROMPT_EXTRA;
-    const memoryBlock = await buildMemoryPromptBlock(projectId, db);
+    let systemPromptExtra = `${PROJECT_SYSTEM_PROMPT_EXTRA}\n\nTODAY'S DATE: ${new Date().toISOString().slice(0, 10)}`;
+    const [memoryBlock, deadlineBlock] = await Promise.all([
+        buildMemoryPromptBlock(projectId, db),
+        buildDeadlinePromptBlock(projectId, db),
+    ]);
     if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
+    if (deadlineBlock) systemPromptExtra += `\n\n${deadlineBlock}`;
     if (attached_documents?.length) {
         const slugByDocumentId = new Map<string, string>();
         for (const [slug, info] of Object.entries(docIndex)) {

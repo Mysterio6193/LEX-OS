@@ -889,6 +889,31 @@ function MemorySavedBlock({
     );
 }
 
+function DeadlineSavedBlock({
+    title,
+    dueDate,
+    showConnector,
+}: {
+    title: string;
+    dueDate: string;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Saved deadline</span>{" "}
+                <span>
+                    {title} — due {dueDate}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 type IndianKanoonBlockItem = {
     caseName: string | null;
     citation: string | null;
@@ -2044,6 +2069,16 @@ export function AssistantMessage({
                     key={globalIdx}
                     kind={event.kind}
                     content={event.content}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "deadline_saved") {
+            return (
+                <DeadlineSavedBlock
+                    key={globalIdx}
+                    title={event.title}
+                    dueDate={event.due_date}
                     showConnector={showConnector}
                 />
             );

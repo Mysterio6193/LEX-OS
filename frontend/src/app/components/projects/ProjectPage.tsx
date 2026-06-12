@@ -88,6 +88,7 @@ import { ProjectDetailsModal } from "./ProjectDetailsModal";
 import { ProjectAssistantTab } from "./ProjectAssistantTab";
 import { ProjectReviewsTab } from "./ProjectReviewsTab";
 import { ProjectMemoryTab } from "./ProjectMemoryTab";
+import { ProjectDeadlinesTab } from "./ProjectDeadlinesTab";
 
 interface Props {
     projectId: string;
@@ -274,7 +275,8 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     const tab: ProjectTab =
         tabParam === "assistant" ||
         tabParam === "reviews" ||
-        tabParam === "memory"
+        tabParam === "memory" ||
+        tabParam === "deadlines"
             ? tabParam
             : initialTab;
     const [addDocsOpen, setAddDocsOpen] = useState(false);
@@ -2538,6 +2540,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                     { id: "assistant", label: "Assistant Chats" },
                     { id: "reviews", label: "Tabular Reviews" },
                     { id: "memory", label: "Memory" },
+                    { id: "deadlines", label: "Deadlines" },
                 ]}
                 active={tab}
                 onChange={handleTabChange}
@@ -3355,6 +3358,14 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                     {/* Tab: Memory */}
                     {tab === "memory" && (
                         <ProjectMemoryTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Deadlines */}
+                    {tab === "deadlines" && (
+                        <ProjectDeadlinesTab
                             projectId={projectId}
                             search={search}
                         />

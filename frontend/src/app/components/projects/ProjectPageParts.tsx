@@ -19,7 +19,12 @@ import type { DocumentVersion } from "@/app/lib/mikeApi";
 import { RowActions } from "@/app/components/shared/RowActions";
 import { HeaderActionsMenu } from "@/app/components/shared/HeaderActionsMenu";
 
-export type ProjectTab = "documents" | "assistant" | "reviews" | "memory";
+export type ProjectTab =
+    | "documents"
+    | "assistant"
+    | "reviews"
+    | "memory"
+    | "deadlines";
 
 export type ProjectContextMenu = {
     x: number;

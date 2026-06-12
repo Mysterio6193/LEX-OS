@@ -39,6 +39,7 @@ import {
 } from "./llm";
 import { safeErrorMessage } from "./safeError";
 import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
+import { saveProjectDeadline } from "./projectDeadlines";
 
 const STANDARD_FONT_DATA_URL = (() => {
   try {
@@ -255,6 +256,34 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["kind", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_deadline",
+      description:
+        "Save a date-bound obligation to this matter's deadline tracker. Every future conversation in this project will see pending deadlines, and they appear in the project's Deadlines tab. Use it when the user mentions a concrete deadline (e.g. 'the filing is due 30 June', 'closing is scheduled for 15 July', 'respond to the counterparty by Friday' — resolve relative dates to a calendar date first). Do NOT save vague timeframes without a date, or deadlines already listed in MATTER DEADLINES.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description:
+              "Short description of the obligation (e.g. 'File statement of defence').",
+          },
+          due_date: {
+            type: "string",
+            description: "Due date in YYYY-MM-DD format.",
+          },
+          notes: {
+            type: "string",
+            description:
+              "Optional extra context (who is responsible, what triggers it, consequences of missing it).",
+          },
+        },
+        required: ["title", "due_date"],
       },
     },
   },
@@ -1999,6 +2028,12 @@ export type MemorySavedResult = {
   content: string;
 };
 
+export type DeadlineSavedResult = {
+  deadline_id: string;
+  title: string;
+  due_date: string;
+};
+
 export type DocReplicatedResult = {
   /** Filename of the source document being copied. */
   filename: string;
@@ -2334,6 +2369,7 @@ export async function runToolCalls(
   workflowsApplied: { workflow_id: string; title: string }[];
   docsEdited: DocEditedResult[];
   memoriesSaved: MemorySavedResult[];
+  deadlinesSaved: DeadlineSavedResult[];
   indiankanoonEvents: IndiankanoonToolEvent[];
   caseCitationEvents: CaseCitationEvent[];
 }> {
@@ -2349,6 +2385,7 @@ export async function runToolCalls(
   const workflowsApplied: { workflow_id: string; title: string }[] = [];
   const docsEdited: DocEditedResult[] = [];
   const memoriesSaved: MemorySavedResult[] = [];
+  const deadlinesSaved: DeadlineSavedResult[] = [];
   const indiankanoonEvents: IndiankanoonToolEvent[] = [];
   const caseCitationEvents: CaseCitationEvent[] = [];
   const courtState: IndiankanoonTurnState =
@@ -2546,6 +2583,50 @@ export async function runToolCalls(
           content: JSON.stringify(
             saved.ok
               ? { ok: true, memory_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_deadline") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Matter deadlines are only available inside project chats.",
+          }),
+        });
+      } else {
+        const title = String(args.title ?? "").trim();
+        const dueDate = String(args.due_date ?? "").trim();
+        const saved = await saveProjectDeadline({
+          projectId,
+          userId,
+          title,
+          dueDate,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: DeadlineSavedResult = {
+            deadline_id: saved.id,
+            title,
+            due_date: dueDate,
+          };
+          deadlinesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "deadline_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, deadline_id: saved.id }
               : { ok: false, error: saved.error },
           ),
         });
@@ -3693,6 +3774,7 @@ export async function runToolCalls(
     workflowsApplied,
     docsEdited,
     memoriesSaved,
+    deadlinesSaved,
     indiankanoonEvents,
     caseCitationEvents,
   };
@@ -3908,6 +3990,12 @@ type AssistantEvent =
     }
   | { type: "workflow_applied"; workflow_id: string; title: string }
   | { type: "memory_saved"; memory_id: string; kind: string; content: string }
+  | {
+      type: "deadline_saved";
+      deadline_id: string;
+      title: string;
+      due_date: string;
+    }
   | {
       type: "doc_edited";
       filename: string;
@@ -4210,6 +4298,7 @@ export async function runLLMStream(params: {
           workflowsApplied,
           docsEdited,
           memoriesSaved,
+          deadlinesSaved,
           indiankanoonEvents,
           caseCitationEvents,
         } = await runToolCalls(
@@ -4274,6 +4363,14 @@ export async function runLLMStream(params: {
             memory_id: m.memory_id,
             kind: m.kind,
             content: m.content,
+          });
+        }
+        for (const d of deadlinesSaved) {
+          events.push({
+            type: "deadline_saved",
+            deadline_id: d.deadline_id,
+            title: d.title,
+            due_date: d.due_date,
           });
         }
         for (const e of docsEdited) {
