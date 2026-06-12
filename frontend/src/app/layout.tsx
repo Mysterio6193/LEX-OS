@@ -15,10 +15,10 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-    metadataBase: new URL("https://app.mikeoss.com"),
-    title: "Mike - AI Legal Platform",
+    metadataBase: new URL("https://app.lexos.org"),
+    title: "lexOS - AI Operating System for Law Firms",
     description:
-        "AI-powered legal document analysis and contract review platform.",
+        "Persistent AI operating system for modern law practices, legal document analysis, and autonomous contract review.",
     icons: {
         icon: [
             { url: "/icon.svg", type: "image/svg+xml" },
@@ -28,25 +28,25 @@ export const metadata: Metadata = {
     },
     openGraph: {
         type: "website",
-        url: "https://app.mikeoss.com",
-        siteName: "Mike",
-        title: "Mike - AI Legal Platform",
+        url: "https://app.lexos.org",
+        siteName: "lexOS",
+        title: "lexOS - AI Operating System for Law Firms",
         description:
-            "AI-powered legal document analysis and contract review platform.",
+            "Persistent AI operating system for modern law practices, legal document analysis, and autonomous contract review.",
         images: [
             {
                 url: "/link-image.jpg",
                 width: 1200,
                 height: 651,
-                alt: "Mike",
+                alt: "lexOS",
             },
         ],
     },
     twitter: {
         card: "summary_large_image",
-        title: "Mike - AI Legal Platform",
+        title: "lexOS - AI Operating System for Law Firms",
         description:
-            "AI-powered legal document analysis and contract review platform.",
+            "Persistent AI operating system for modern law practices, legal document analysis, and autonomous contract review.",
         images: ["/link-image.jpg"],
     },
 };
