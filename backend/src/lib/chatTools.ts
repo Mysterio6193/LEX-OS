@@ -1433,7 +1433,7 @@ export async function runEditDocument(params: {
     bytes: editedBytes,
     changes,
     errors,
-  } = await applyTrackedEdits(current.bytes, edits, { author: "Mike" });
+  } = await applyTrackedEdits(current.bytes, edits, { author: "lexOS" });
 
   if (changes.length === 0) {
     return {

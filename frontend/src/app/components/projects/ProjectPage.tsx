@@ -1390,8 +1390,8 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     function hasMovePayload(dt: DataTransfer): boolean {
         return Array.from(dt.types).some(
             (type) =>
-                type === "application/mike-doc" ||
-                type === "application/mike-folder",
+                type === "application/lexos-doc" ||
+                type === "application/lexos-folder",
         );
     }
 
@@ -1400,7 +1400,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     }
 
     function hasDocumentPayload(dt: DataTransfer): boolean {
-        return Array.from(dt.types).includes("application/mike-doc");
+        return Array.from(dt.types).includes("application/lexos-doc");
     }
 
     function currentVersionNumber(doc: Document): number | null {
@@ -1563,7 +1563,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
         }
         void handleDropExistingDocumentVersion(
             doc,
-            e.dataTransfer.getData("application/mike-doc"),
+            e.dataTransfer.getData("application/lexos-doc"),
         );
     }
 
@@ -1572,8 +1572,8 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
         dt: DataTransfer,
     ) {
         if (!hasMovePayload(dt)) return;
-        const docId = dt.getData("application/mike-doc");
-        const subFolderId = dt.getData("application/mike-folder");
+        const docId = dt.getData("application/lexos-doc");
+        const subFolderId = dt.getData("application/lexos-folder");
         if (docId) {
             const doc = (project?.documents ?? []).find((d) => d.id === docId);
             if (!doc || (doc.folder_id ?? null) === targetFolderId) return;
@@ -1761,7 +1761,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                         return;
                                     }
                                     e.dataTransfer.setData(
-                                        "application/mike-doc",
+                                        "application/lexos-doc",
                                         doc.id,
                                     );
                                     e.dataTransfer.effectAllowed = "copyMove";
@@ -2079,7 +2079,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                         return;
                                     }
                                     e.dataTransfer.setData(
-                                        "application/mike-folder",
+                                        "application/lexos-folder",
                                         folder.id,
                                     );
                                     e.dataTransfer.effectAllowed = "move";
@@ -2762,7 +2762,7 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                                         return;
                                                                     }
                                                                     e.dataTransfer.setData(
-                                                                        "application/mike-doc",
+                                                                        "application/lexos-doc",
                                                                         doc.id,
                                                                     );
                                                                     e.dataTransfer.effectAllowed =

@@ -564,7 +564,7 @@ export default function ProjectAssistantChatPage({ params }: Props) {
 
     const handleChatDrop = (e: React.DragEvent) => {
         e.preventDefault();
-        const docId = e.dataTransfer.getData("application/mike-doc");
+        const docId = e.dataTransfer.getData("application/lexos-doc");
         if (!docId) return;
         const doc = project?.documents?.find((d) => d.id === docId);
         if (doc) chatInputRef.current?.addDoc(doc);
@@ -850,10 +850,10 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                                 // Only show the upload overlay for external file drags, not internal moves
                                 const isInternal =
                                     Array.from(e.dataTransfer.types).includes(
-                                        "application/mike-doc",
+                                        "application/lexos-doc",
                                     ) ||
                                     Array.from(e.dataTransfer.types).includes(
-                                        "application/mike-folder",
+                                        "application/lexos-folder",
                                     );
                                 if (!isInternal) setExplorerDragOver(true);
                             }}
@@ -922,10 +922,10 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                                 onDrop={async (e) => {
                                     e.preventDefault();
                                     const docId = e.dataTransfer.getData(
-                                        "application/mike-doc",
+                                        "application/lexos-doc",
                                     );
                                     const folderId = e.dataTransfer.getData(
-                                        "application/mike-folder",
+                                        "application/lexos-folder",
                                     );
                                     if (docId) {
                                         e.stopPropagation();
