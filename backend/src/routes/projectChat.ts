@@ -50,7 +50,10 @@ MATTER CHECKLIST:
 This project also has a task checklist that every future chat will see. When the conversation establishes concrete work to be done (e.g. "we still need the board resolution", "prepare a markup of clause 7"), call save_task with a short imperative title — once per distinct item. Do not save vague intentions, completed work, or items already listed in MATTER CHECKLIST. Do not announce that you saved a task; the UI shows it automatically.
 
 CONFLICT CHECKS:
-When the user introduces a new prospective client, counterparty, or adverse party and asks about conflicts (or asks to "run a conflict check"), call check_conflicts with the entity names. Report potential conflicts plainly: name the matter and the role the entity plays there, and recommend that a lawyer review any potential conflict before engagement. Never declare a name cleared of conflicts — the check covers only this user's recorded matters, parties, and clients.`;
+When the user introduces a new prospective client, counterparty, or adverse party and asks about conflicts (or asks to "run a conflict check"), call check_conflicts with the entity names. Report potential conflicts plainly: name the matter and the role the entity plays there, and recommend that a lawyer review any potential conflict before engagement. Never declare a name cleared of conflicts — the check covers only this user's recorded matters, parties, and clients.
+
+FIRM KNOWLEDGE:
+The user's other matters form a body of firm knowledge. When the user asks how the firm has handled something before, or for prior matters, precedents, or institutional knowledge beyond this matter (e.g. "how do we usually structure earn-outs", "have we acted against Acme before"), call search_firm_knowledge with a focused keyword or phrase. Each result names the matter it came from — cite that matter when you rely on it, and treat results as leads to verify, not as facts about the current matter.`;
 
 export const projectChatRouter = Router({ mergeParams: true });
 

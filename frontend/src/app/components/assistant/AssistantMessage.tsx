@@ -995,6 +995,32 @@ function ConflictCheckBlock({
     );
 }
 
+function FirmKnowledgeBlock({
+    query,
+    hitCount,
+    showConnector,
+}: {
+    query: string;
+    hitCount: number;
+    showConnector?: boolean;
+}) {
+    const detail = `${hitCount} ${hitCount === 1 ? "result" : "results"}`;
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Searched firm knowledge</span>{" "}
+                <span>
+                    for “{query}” — {detail}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 type IndianKanoonBlockItem = {
     caseName: string | null;
     citation: string | null;
@@ -2190,6 +2216,16 @@ export function AssistantMessage({
                     names={event.names}
                     matchCount={event.match_count}
                     conflictCount={event.conflict_count}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "firm_knowledge_searched") {
+            return (
+                <FirmKnowledgeBlock
+                    key={globalIdx}
+                    query={event.query}
+                    hitCount={event.hit_count}
                     showConnector={showConnector}
                 />
             );

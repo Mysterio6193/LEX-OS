@@ -43,6 +43,7 @@ import { saveProjectDeadline } from "./projectDeadlines";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
+import { searchFirmKnowledge } from "./firmKnowledge";
 
 const STANDARD_FONT_DATA_URL = (() => {
   try {
@@ -359,6 +360,24 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["names"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_firm_knowledge",
+      description:
+        "Search across ALL of the user's matters — memories, deadlines, checklist tasks, parties, clients, and document filenames — for a keyword or phrase. Use when the user asks how the firm has handled something before, or for prior matters, precedents, or institutional knowledge beyond the current matter (e.g. 'how do we usually structure earn-outs', 'have we acted against Acme before'). Each result is labeled with the matter it came from; cite that matter when you use it.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Keyword or phrase to search for across all matters.",
+          },
+        },
+        required: ["query"],
       },
     },
   },
@@ -2120,6 +2139,11 @@ export type PartySavedResult = {
   role: string;
 };
 
+export type FirmKnowledgeSearchedResult = {
+  query: string;
+  hit_count: number;
+};
+
 export type ConflictCheckResultEvent = {
   names: string[];
   match_count: number;
@@ -2465,6 +2489,7 @@ export async function runToolCalls(
   deadlinesSaved: DeadlineSavedResult[];
   partiesSaved: PartySavedResult[];
   conflictChecks: ConflictCheckResultEvent[];
+  firmKnowledgeSearches: FirmKnowledgeSearchedResult[];
   tasksSaved: TaskSavedResult[];
   indiankanoonEvents: IndiankanoonToolEvent[];
   caseCitationEvents: CaseCitationEvent[];
@@ -2484,6 +2509,7 @@ export async function runToolCalls(
   const deadlinesSaved: DeadlineSavedResult[] = [];
   const partiesSaved: PartySavedResult[] = [];
   const conflictChecks: ConflictCheckResultEvent[] = [];
+  const firmKnowledgeSearches: FirmKnowledgeSearchedResult[] = [];
   const tasksSaved: TaskSavedResult[] = [];
   const indiankanoonEvents: IndiankanoonToolEvent[] = [];
   const caseCitationEvents: CaseCitationEvent[] = [];
@@ -2857,6 +2883,38 @@ export async function runToolCalls(
         conflictChecks.push(event);
         write(
           `data: ${JSON.stringify({ type: "conflict_check", ...event })}\n\n`,
+        );
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({ ok: true, ...result }),
+        });
+      }
+    } else if (tc.function.name === "search_firm_knowledge") {
+      const query = String(args.query ?? "").trim();
+      if (!query) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Provide a search query.",
+          }),
+        });
+      } else {
+        const result = await searchFirmKnowledge({
+          query,
+          userId,
+          userEmail,
+          db,
+        });
+        const event: FirmKnowledgeSearchedResult = {
+          query: result.query,
+          hit_count: result.hits.length,
+        };
+        firmKnowledgeSearches.push(event);
+        write(
+          `data: ${JSON.stringify({ type: "firm_knowledge_searched", ...event })}\n\n`,
         );
         toolResults.push({
           role: "tool",
@@ -4010,6 +4068,7 @@ export async function runToolCalls(
     deadlinesSaved,
     partiesSaved,
     conflictChecks,
+    firmKnowledgeSearches,
     tasksSaved,
     indiankanoonEvents,
     caseCitationEvents,
@@ -4240,6 +4299,7 @@ type AssistantEvent =
       match_count: number;
       conflict_count: number;
     }
+  | { type: "firm_knowledge_searched"; query: string; hit_count: number }
   | {
       type: "doc_edited";
       filename: string;
@@ -4548,6 +4608,7 @@ export async function runLLMStream(params: {
           deadlinesSaved,
           partiesSaved,
           conflictChecks,
+          firmKnowledgeSearches,
           tasksSaved,
           indiankanoonEvents,
           caseCitationEvents,
@@ -4638,6 +4699,13 @@ export async function runLLMStream(params: {
             names: c.names,
             match_count: c.match_count,
             conflict_count: c.conflict_count,
+          });
+        }
+        for (const f of firmKnowledgeSearches) {
+          events.push({
+            type: "firm_knowledge_searched",
+            query: f.query,
+            hit_count: f.hit_count,
           });
         }
         for (const t of tasksSaved) {

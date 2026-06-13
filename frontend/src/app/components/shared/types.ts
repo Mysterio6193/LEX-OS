@@ -179,6 +179,11 @@ export type AssistantEvent =
       conflict_count: number;
     }
   | {
+      type: "firm_knowledge_searched";
+      query: string;
+      hit_count: number;
+    }
+  | {
       type: "doc_edited";
       filename: string;
       document_id: string;

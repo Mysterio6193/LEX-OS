@@ -631,6 +631,15 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "firm_knowledge_searched") {
+              pushEvent({
+                type: "firm_knowledge_searched",
+                query: (data.query as string) ?? "",
+                hit_count: (data.hit_count as number) ?? 0,
+              });
+              continue;
+            }
+
             if (data.type === "case_citation") {
               pushEvent({
                 type: "case_citation",
