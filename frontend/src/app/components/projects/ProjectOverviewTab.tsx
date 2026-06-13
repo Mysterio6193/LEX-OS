@@ -178,6 +178,37 @@ export function ProjectOverviewTab({
                                 </span>
                             )}
                         </p>
+                        {(project?.matter_type ||
+                            project?.court ||
+                            project?.case_number ||
+                            project?.jurisdiction) && (
+                            <div className="mt-1 space-y-0.5 border-t border-gray-100 pt-1 text-xs text-gray-500">
+                                {project?.matter_type && (
+                                    <p>{project.matter_type}</p>
+                                )}
+                                {project?.court && (
+                                    <p>
+                                        {project.court}
+                                        {project?.case_number
+                                            ? ` · ${project.case_number}`
+                                            : ""}
+                                    </p>
+                                )}
+                                {(project?.jurisdiction ||
+                                    project?.filing_date) && (
+                                    <p>
+                                        {project?.jurisdiction ?? ""}
+                                        {project?.jurisdiction &&
+                                        project?.filing_date
+                                            ? " · "
+                                            : ""}
+                                        {project?.filing_date
+                                            ? `filed ${project.filing_date}`
+                                            : ""}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                         <p className="text-xs text-gray-500">
                             {project?.document_count ?? 0} documents ·{" "}
                             {project?.chat_count ?? 0} chats ·{" "}

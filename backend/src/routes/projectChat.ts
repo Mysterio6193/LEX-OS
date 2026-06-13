@@ -24,6 +24,7 @@ import { buildDeadlinePromptBlock } from "../lib/projectDeadlines";
 import { buildPartyPromptBlock } from "../lib/projectParties";
 import { buildTaskPromptBlock } from "../lib/projectTasks";
 import { buildClientPromptBlock } from "../lib/clients";
+import { buildMatterDetailsPromptBlock } from "../lib/projectCourt";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
@@ -162,14 +163,22 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     // knows which docs the user is highlighting *now*, distinct from
     // the broader project doc list.
     let systemPromptExtra = `${PROJECT_SYSTEM_PROMPT_EXTRA}\n\nTODAY'S DATE: ${new Date().toISOString().slice(0, 10)}`;
-    const [clientBlock, memoryBlock, deadlineBlock, partyBlock, taskBlock] =
-        await Promise.all([
-            buildClientPromptBlock(projectId, db),
-            buildMemoryPromptBlock(projectId, db),
-            buildDeadlinePromptBlock(projectId, db),
-            buildPartyPromptBlock(projectId, db),
-            buildTaskPromptBlock(projectId, db),
-        ]);
+    const [
+        matterDetailsBlock,
+        clientBlock,
+        memoryBlock,
+        deadlineBlock,
+        partyBlock,
+        taskBlock,
+    ] = await Promise.all([
+        buildMatterDetailsPromptBlock(projectId, db),
+        buildClientPromptBlock(projectId, db),
+        buildMemoryPromptBlock(projectId, db),
+        buildDeadlinePromptBlock(projectId, db),
+        buildPartyPromptBlock(projectId, db),
+        buildTaskPromptBlock(projectId, db),
+    ]);
+    if (matterDetailsBlock) systemPromptExtra += `\n\n${matterDetailsBlock}`;
     if (clientBlock) systemPromptExtra += `\n\n${clientBlock}`;
     if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
     if (deadlineBlock) systemPromptExtra += `\n\n${deadlineBlock}`;

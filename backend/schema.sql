@@ -120,6 +120,19 @@ create index if not exists idx_projects_client
 alter table public.projects
   add column if not exists archived_at timestamptz;
 
+-- Court / forum metadata (India litigation): cause-title basics so the
+-- assistant knows the forum and the Overview can surface it.
+alter table public.projects
+  add column if not exists matter_type text;
+alter table public.projects
+  add column if not exists court text;
+alter table public.projects
+  add column if not exists case_number text;
+alter table public.projects
+  add column if not exists jurisdiction text;
+alter table public.projects
+  add column if not exists filing_date date;
+
 create table if not exists public.project_subfolders (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,

@@ -31,6 +31,12 @@ export interface Project {
   client?: { id: string; name: string } | null;
   shared_with: string[];
   archived_at?: string | null;
+  /** Court / forum metadata (India litigation). */
+  matter_type?: string | null;
+  court?: string | null;
+  case_number?: string | null;
+  jurisdiction?: string | null;
+  filing_date?: string | null;
   created_at: string;
   updated_at: string;
   documents?: Document[];

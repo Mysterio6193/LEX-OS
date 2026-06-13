@@ -1171,6 +1171,11 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
         cmNumber: string;
         clientId: string | null;
         clientName: string | null;
+        matterType: string;
+        court: string;
+        caseNumber: string;
+        jurisdiction: string;
+        filingDate: string;
     }) {
         if (project && project.is_owner === false) {
             setOwnerOnlyAction("edit project details");
@@ -1183,6 +1188,11 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
             name,
             cm_number: cmNumber,
             client_id: values.clientId,
+            matter_type: values.matterType || null,
+            court: values.court || null,
+            case_number: values.caseNumber || null,
+            jurisdiction: values.jurisdiction || null,
+            filing_date: values.filingDate || null,
         });
         setProject((prev) =>
             prev
@@ -1191,6 +1201,11 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                       name: updated.name,
                       cm_number: updated.cm_number,
                       client_id: updated.client_id ?? null,
+                      matter_type: updated.matter_type ?? null,
+                      court: updated.court ?? null,
+                      case_number: updated.case_number ?? null,
+                      jurisdiction: updated.jurisdiction ?? null,
+                      filing_date: updated.filing_date ?? null,
                       client:
                           updated.client ??
                           (values.clientId && values.clientName

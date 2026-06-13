@@ -340,6 +340,11 @@ export async function updateProject(
         client_id?: string | null;
         shared_with?: string[];
         archived?: boolean;
+        matter_type?: string | null;
+        court?: string | null;
+        case_number?: string | null;
+        jurisdiction?: string | null;
+        filing_date?: string | null;
     },
 ): Promise<Project> {
     if (isDemoMode) return mockApi.updateProject(projectId, payload);

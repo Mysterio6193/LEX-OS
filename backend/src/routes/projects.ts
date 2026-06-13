@@ -522,6 +522,20 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
       ? new Date().toISOString()
       : null;
   }
+  // Court / forum metadata (India litigation). Empty string clears the field.
+  for (const field of [
+    "matter_type",
+    "court",
+    "case_number",
+    "jurisdiction",
+    "filing_date",
+  ] as const) {
+    if (req.body[field] !== undefined) {
+      const raw = req.body[field];
+      const value = typeof raw === "string" ? raw.trim() : raw;
+      updates[field] = value === "" || value == null ? null : value;
+    }
+  }
 
   const db = createServerSupabase();
   const { data, error } = await db

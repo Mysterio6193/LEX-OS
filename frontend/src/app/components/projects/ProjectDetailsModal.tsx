@@ -26,6 +26,11 @@ interface ProjectDetailsModalProps {
         cmNumber: string;
         clientId: string | null;
         clientName: string | null;
+        matterType: string;
+        court: string;
+        caseNumber: string;
+        jurisdiction: string;
+        filingDate: string;
     }) => Promise<void>;
     onShareProject: () => void;
 }
@@ -43,6 +48,12 @@ export function ProjectDetailsModal({
 }: ProjectDetailsModalProps) {
     const [nameDraft, setNameDraft] = useState("");
     const [cmDraft, setCmDraft] = useState("");
+    // Court / forum metadata (India litigation).
+    const [matterTypeDraft, setMatterTypeDraft] = useState("");
+    const [courtDraft, setCourtDraft] = useState("");
+    const [caseNumberDraft, setCaseNumberDraft] = useState("");
+    const [jurisdictionDraft, setJurisdictionDraft] = useState("");
+    const [filingDateDraft, setFilingDateDraft] = useState("");
     const [people, setPeople] = useState<ProjectPeople | null>(null);
     const [peopleLoading, setPeopleLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -60,6 +71,11 @@ export function ProjectDetailsModal({
         if (!open || !project) return;
         setNameDraft(project.name);
         setCmDraft(project.cm_number ?? "");
+        setMatterTypeDraft(project.matter_type ?? "");
+        setCourtDraft(project.court ?? "");
+        setCaseNumberDraft(project.case_number ?? "");
+        setJurisdictionDraft(project.jurisdiction ?? "");
+        setFilingDateDraft(project.filing_date ?? "");
         setClientIdDraft(project.client_id ?? "");
         setNewClientName("");
         setSaved(false);
@@ -125,6 +141,13 @@ export function ProjectDetailsModal({
     const clientNotesChanged =
         !!selectedClient &&
         clientNotesDraft.trim() !== (selectedClient.notes ?? "");
+    const courtMetaChanged =
+        !!project &&
+        (matterTypeDraft.trim() !== (project.matter_type ?? "") ||
+            courtDraft.trim() !== (project.court ?? "") ||
+            caseNumberDraft.trim() !== (project.case_number ?? "") ||
+            jurisdictionDraft.trim() !== (project.jurisdiction ?? "") ||
+            filingDateDraft !== (project.filing_date ?? ""));
     const hasChanges = useMemo(() => {
         if (!project) return false;
         return (
@@ -133,7 +156,8 @@ export function ProjectDetailsModal({
             (isCreatingClient
                 ? !!trimmedNewClientName
                 : clientIdDraft !== (project.client_id ?? "")) ||
-            clientNotesChanged
+            clientNotesChanged ||
+            courtMetaChanged
         );
     }, [
         project,
@@ -143,6 +167,7 @@ export function ProjectDetailsModal({
         isCreatingClient,
         trimmedNewClientName,
         clientNotesChanged,
+        courtMetaChanged,
     ]);
 
     if (!project) return null;
@@ -195,6 +220,11 @@ export function ProjectDetailsModal({
                 cmNumber: trimmedCm,
                 clientId,
                 clientName,
+                matterType: matterTypeDraft.trim(),
+                court: courtDraft.trim(),
+                caseNumber: caseNumberDraft.trim(),
+                jurisdiction: jurisdictionDraft.trim(),
+                filingDate: filingDateDraft,
             });
             setSaved(true);
         } catch {
@@ -273,6 +303,80 @@ export function ProjectDetailsModal({
                         className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-gray-300 disabled:cursor-not-allowed disabled:text-gray-400"
                     />
                 </div>
+
+                {canEdit ? (
+                    <div className="flex flex-col gap-3">
+                        <span className="text-xs font-medium text-gray-700">
+                            Court / Forum
+                        </span>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <input
+                                value={matterTypeDraft}
+                                onChange={(e) => {
+                                    setMatterTypeDraft(e.target.value);
+                                    setSaved(false);
+                                    setError(null);
+                                }}
+                                disabled={saving}
+                                placeholder="Matter type (e.g. Writ Petition)"
+                                className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-gray-300"
+                            />
+                            <input
+                                value={courtDraft}
+                                onChange={(e) => {
+                                    setCourtDraft(e.target.value);
+                                    setSaved(false);
+                                    setError(null);
+                                }}
+                                disabled={saving}
+                                placeholder="Court (e.g. High Court of Delhi)"
+                                className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-gray-300"
+                            />
+                            <input
+                                value={caseNumberDraft}
+                                onChange={(e) => {
+                                    setCaseNumberDraft(e.target.value);
+                                    setSaved(false);
+                                    setError(null);
+                                }}
+                                disabled={saving}
+                                placeholder="Case number"
+                                className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-gray-300"
+                            />
+                            <input
+                                value={jurisdictionDraft}
+                                onChange={(e) => {
+                                    setJurisdictionDraft(e.target.value);
+                                    setSaved(false);
+                                    setError(null);
+                                }}
+                                disabled={saving}
+                                placeholder="Jurisdiction (e.g. Delhi)"
+                                className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-gray-300"
+                            />
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label
+                                    htmlFor="project-details-filing-date"
+                                    className="text-[11px] text-gray-400"
+                                >
+                                    Filing date
+                                </label>
+                                <input
+                                    id="project-details-filing-date"
+                                    type="date"
+                                    value={filingDateDraft}
+                                    onChange={(e) => {
+                                        setFilingDateDraft(e.target.value);
+                                        setSaved(false);
+                                        setError(null);
+                                    }}
+                                    disabled={saving}
+                                    className="h-9 w-full rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-900 outline-none transition-colors focus:border-gray-300 sm:w-48"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
 
                 {canEdit ? (
                     <div className="flex flex-col gap-3">
