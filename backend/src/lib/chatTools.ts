@@ -40,6 +40,7 @@ import {
 import { safeErrorMessage } from "./safeError";
 import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 import { saveProjectDeadline } from "./projectDeadlines";
+import { saveProjectHearing } from "./projectHearings";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
@@ -288,6 +289,42 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["title", "due_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_hearing",
+      description:
+        "Record a court hearing (cause-list entry) for this matter. Every future conversation will see upcoming hearings, and they appear in the project's Hearings tab. Use it when the user mentions a court listing or next date (e.g. 'listed before the High Court on 12 July for arguments', 'adjourned to 3 August'). Resolve relative dates against TODAY'S DATE. Do NOT record hearings already listed in COURT HEARINGS.",
+      parameters: {
+        type: "object",
+        properties: {
+          purpose: {
+            type: "string",
+            description:
+              "Purpose or stage of the hearing (e.g. 'Arguments on interim application', 'Framing of issues').",
+          },
+          hearing_date: {
+            type: "string",
+            description: "Hearing date in YYYY-MM-DD format.",
+          },
+          court: {
+            type: "string",
+            description:
+              "Court or forum, if stated (e.g. 'High Court of Delhi').",
+          },
+          case_number: {
+            type: "string",
+            description: "Case number, if stated.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional extra context.",
+          },
+        },
+        required: ["purpose", "hearing_date"],
       },
     },
   },
@@ -2128,6 +2165,13 @@ export type DeadlineSavedResult = {
   due_date: string;
 };
 
+export type HearingSavedResult = {
+  hearing_id: string;
+  purpose: string;
+  hearing_date: string;
+  court?: string | null;
+};
+
 export type TaskSavedResult = {
   task_id: string;
   title: string;
@@ -2487,6 +2531,7 @@ export async function runToolCalls(
   docsEdited: DocEditedResult[];
   memoriesSaved: MemorySavedResult[];
   deadlinesSaved: DeadlineSavedResult[];
+  hearingsSaved: HearingSavedResult[];
   partiesSaved: PartySavedResult[];
   conflictChecks: ConflictCheckResultEvent[];
   firmKnowledgeSearches: FirmKnowledgeSearchedResult[];
@@ -2507,6 +2552,7 @@ export async function runToolCalls(
   const docsEdited: DocEditedResult[] = [];
   const memoriesSaved: MemorySavedResult[] = [];
   const deadlinesSaved: DeadlineSavedResult[] = [];
+  const hearingsSaved: HearingSavedResult[] = [];
   const partiesSaved: PartySavedResult[] = [];
   const conflictChecks: ConflictCheckResultEvent[] = [];
   const firmKnowledgeSearches: FirmKnowledgeSearchedResult[] = [];
@@ -2752,6 +2798,56 @@ export async function runToolCalls(
           content: JSON.stringify(
             saved.ok
               ? { ok: true, deadline_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_hearing") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Court hearings are only available inside project chats.",
+          }),
+        });
+      } else {
+        const purpose = String(args.purpose ?? "").trim();
+        const hearingDate = String(args.hearing_date ?? "").trim();
+        const court =
+          typeof args.court === "string" ? args.court : null;
+        const saved = await saveProjectHearing({
+          projectId,
+          userId,
+          purpose,
+          hearingDate,
+          court,
+          caseNumber:
+            typeof args.case_number === "string" ? args.case_number : null,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: HearingSavedResult = {
+            hearing_id: saved.id,
+            purpose,
+            hearing_date: hearingDate,
+            court,
+          };
+          hearingsSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "hearing_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, hearing_id: saved.id }
               : { ok: false, error: saved.error },
           ),
         });
@@ -4066,6 +4162,7 @@ export async function runToolCalls(
     docsEdited,
     memoriesSaved,
     deadlinesSaved,
+    hearingsSaved,
     partiesSaved,
     conflictChecks,
     firmKnowledgeSearches,
@@ -4290,6 +4387,13 @@ type AssistantEvent =
       deadline_id: string;
       title: string;
       due_date: string;
+    }
+  | {
+      type: "hearing_saved";
+      hearing_id: string;
+      purpose: string;
+      hearing_date: string;
+      court?: string | null;
     }
   | { type: "party_saved"; party_id: string; name: string; role: string }
   | { type: "task_saved"; task_id: string; title: string }
@@ -4606,6 +4710,7 @@ export async function runLLMStream(params: {
           docsEdited,
           memoriesSaved,
           deadlinesSaved,
+          hearingsSaved,
           partiesSaved,
           conflictChecks,
           firmKnowledgeSearches,
@@ -4683,6 +4788,15 @@ export async function runLLMStream(params: {
             deadline_id: d.deadline_id,
             title: d.title,
             due_date: d.due_date,
+          });
+        }
+        for (const h of hearingsSaved) {
+          events.push({
+            type: "hearing_saved",
+            hearing_id: h.hearing_id,
+            purpose: h.purpose,
+            hearing_date: h.hearing_date,
+            court: h.court,
           });
         }
         for (const p of partiesSaved) {

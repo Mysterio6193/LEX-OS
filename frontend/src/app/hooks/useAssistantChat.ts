@@ -602,6 +602,18 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "hearing_saved") {
+              pushEvent({
+                type: "hearing_saved",
+                hearing_id: data.hearing_id as string,
+                purpose: data.purpose as string,
+                hearing_date: data.hearing_date as string,
+                court:
+                  typeof data.court === "string" ? data.court : undefined,
+              });
+              continue;
+            }
+
             if (data.type === "party_saved") {
               pushEvent({
                 type: "party_saved",

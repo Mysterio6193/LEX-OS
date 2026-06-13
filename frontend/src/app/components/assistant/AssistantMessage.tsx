@@ -914,6 +914,34 @@ function DeadlineSavedBlock({
     );
 }
 
+function HearingSavedBlock({
+    purpose,
+    hearingDate,
+    court,
+    showConnector,
+}: {
+    purpose: string;
+    hearingDate: string;
+    court?: string | null;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Saved hearing</span>{" "}
+                <span>
+                    {purpose} — {hearingDate}
+                    {court ? ` at ${court}` : ""}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 function PartySavedBlock({
     name,
     role,
@@ -2186,6 +2214,17 @@ export function AssistantMessage({
                     key={globalIdx}
                     title={event.title}
                     dueDate={event.due_date}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "hearing_saved") {
+            return (
+                <HearingSavedBlock
+                    key={globalIdx}
+                    purpose={event.purpose}
+                    hearingDate={event.hearing_date}
+                    court={event.court}
                     showConnector={showConnector}
                 />
             );

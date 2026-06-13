@@ -28,6 +28,7 @@ export type ProjectTab =
     | "reviews"
     | "memory"
     | "deadlines"
+    | "hearings"
     | "parties"
     | "timeline"
     | "tasks";

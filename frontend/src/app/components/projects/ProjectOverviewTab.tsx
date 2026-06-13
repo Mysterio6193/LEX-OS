@@ -5,6 +5,7 @@ import {
     Briefcase,
     CalendarClock,
     FileSignature,
+    Gavel,
     History,
     ListChecks,
     Loader2,
@@ -14,6 +15,7 @@ import {
 import {
     getProjectTimeline,
     listProjectDeadlines,
+    listProjectHearings,
     listProjectMemories,
     listProjectParties,
     listProjectTasks,
@@ -21,6 +23,7 @@ import {
 import type {
     Project,
     ProjectDeadline,
+    ProjectHearing,
     ProjectMemory,
     ProjectParty,
     ProjectTask,
@@ -96,6 +99,7 @@ export function ProjectOverviewTab({
 }) {
     const [parties, setParties] = useState<ProjectParty[]>([]);
     const [deadlines, setDeadlines] = useState<ProjectDeadline[]>([]);
+    const [hearings, setHearings] = useState<ProjectHearing[]>([]);
     const [tasks, setTasks] = useState<ProjectTask[]>([]);
     const [memories, setMemories] = useState<ProjectMemory[]>([]);
     const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -109,13 +113,15 @@ export function ProjectOverviewTab({
             listProjectTasks(projectId),
             listProjectMemories(projectId),
             getProjectTimeline(projectId, { limit: 10 }),
-        ]).then(([p, d, t, m, tl]) => {
+            listProjectHearings(projectId),
+        ]).then(([p, d, t, m, tl, h]) => {
             if (cancelled) return;
             if (p.status === "fulfilled") setParties(p.value);
             if (d.status === "fulfilled") setDeadlines(d.value);
             if (t.status === "fulfilled") setTasks(t.value);
             if (m.status === "fulfilled") setMemories(m.value);
             if (tl.status === "fulfilled") setTimeline(tl.value.events);
+            if (h.status === "fulfilled") setHearings(h.value);
             setLoading(false);
         });
         return () => {
@@ -136,6 +142,10 @@ export function ProjectOverviewTab({
     const upcomingDeadlines = deadlines
         .filter((d) => d.status === "pending")
         .sort((a, b) => a.due_date.localeCompare(b.due_date))
+        .slice(0, SECTION_LIMIT);
+    const upcomingHearings = hearings
+        .filter((h) => h.status !== "done")
+        .sort((a, b) => a.hearing_date.localeCompare(b.hearing_date))
         .slice(0, SECTION_LIMIT);
     const openTasks = tasks.filter((t) => t.status === "pending");
     const decisions = memories.filter((m) => m.kind === "decision");
@@ -239,6 +249,35 @@ export function ProjectOverviewTab({
                                     </span>
                                     <span className="min-w-0 flex-1 truncate text-gray-700">
                                         {d.title}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </SectionCard>
+
+                <SectionCard
+                    icon={Gavel}
+                    title="Upcoming hearings"
+                    viewAllTab="hearings"
+                    onNavigate={onNavigate}
+                >
+                    {upcomingHearings.length === 0 ? (
+                        <EmptyHint text="No upcoming hearings." />
+                    ) : (
+                        <ul className="space-y-1.5">
+                            {upcomingHearings.map((h) => (
+                                <li
+                                    key={h.id}
+                                    className="flex items-baseline gap-2 text-sm"
+                                >
+                                    <span
+                                        className={`shrink-0 text-xs font-medium ${h.hearing_date < today ? "text-red-600" : "text-gray-400"}`}
+                                    >
+                                        {shortDate(h.hearing_date)}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-gray-700">
+                                        {h.purpose}
                                     </span>
                                 </li>
                             ))}

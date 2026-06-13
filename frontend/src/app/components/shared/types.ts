@@ -168,6 +168,13 @@ export type AssistantEvent =
       due_date: string;
     }
   | {
+      type: "hearing_saved";
+      hearing_id: string;
+      purpose: string;
+      hearing_date: string;
+      court?: string | null;
+    }
+  | {
       type: "party_saved";
       party_id: string;
       name: string;
@@ -509,6 +516,24 @@ export interface ProjectDeadline {
   due_date: string;
   notes: string | null;
   status: "pending" | "done";
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Court hearings (cause list)
+
+export interface ProjectHearing {
+  id: string;
+  project_id: string;
+  user_id: string;
+  purpose: string;
+  court: string | null;
+  case_number: string | null;
+  hearing_date: string;
+  notes: string | null;
+  status: "scheduled" | "adjourned" | "done";
   source: "assistant" | "user";
   source_chat_id: string | null;
   created_at: string;

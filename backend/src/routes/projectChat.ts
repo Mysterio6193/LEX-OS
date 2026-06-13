@@ -25,6 +25,7 @@ import { buildPartyPromptBlock } from "../lib/projectParties";
 import { buildTaskPromptBlock } from "../lib/projectTasks";
 import { buildClientPromptBlock } from "../lib/clients";
 import { buildMatterDetailsPromptBlock } from "../lib/projectCourt";
+import { buildHearingsPromptBlock } from "../lib/projectHearings";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
@@ -43,6 +44,9 @@ Documents listed with folder path "Precedent Library" are firm precedents from t
 
 SAVING DEADLINES:
 This project also has a deadline tracker that every future chat will see. When the user mentions a concrete date-bound obligation (e.g. "the filing is due 30 June", "closing is scheduled for 15 July", "respond by next Friday"), call save_deadline with the title and the resolved YYYY-MM-DD date. Resolve relative dates against TODAY'S DATE; if the date is genuinely ambiguous, ask the user instead of guessing. Do not save vague timeframes or deadlines already listed in MATTER DEADLINES. Do not announce that you saved a deadline; the UI shows it automatically.
+
+RECORDING HEARINGS:
+This is an Indian litigation practice and matters track their court hearings (cause list). When the user mentions a court listing or next date (e.g. "the matter is listed before the High Court on 12 July for arguments", "next date of hearing is 3 August", "it got adjourned to next month"), call save_hearing with the purpose/stage and the resolved YYYY-MM-DD hearing_date, plus court and case number when stated. Resolve relative dates against TODAY'S DATE; if genuinely ambiguous, ask. Do not record hearings already listed in COURT HEARINGS. Do not announce that you saved a hearing; the UI shows it automatically.
 
 RECORDING PARTIES:
 This project also tracks the parties connected to the matter. When the conversation establishes who is involved (e.g. "the counterparty is Acme GmbH", "we act for Northwind Ltd", "opposing counsel is Baker & Co"), call save_party with the name and role — once per distinct entity. Do not record parties already listed in MATTER PARTIES. Do not announce that you recorded a party; the UI shows it automatically.
@@ -168,6 +172,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         clientBlock,
         memoryBlock,
         deadlineBlock,
+        hearingBlock,
         partyBlock,
         taskBlock,
     ] = await Promise.all([
@@ -175,6 +180,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         buildClientPromptBlock(projectId, db),
         buildMemoryPromptBlock(projectId, db),
         buildDeadlinePromptBlock(projectId, db),
+        buildHearingsPromptBlock(projectId, db),
         buildPartyPromptBlock(projectId, db),
         buildTaskPromptBlock(projectId, db),
     ]);
@@ -182,6 +188,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     if (clientBlock) systemPromptExtra += `\n\n${clientBlock}`;
     if (memoryBlock) systemPromptExtra += `\n\n${memoryBlock}`;
     if (deadlineBlock) systemPromptExtra += `\n\n${deadlineBlock}`;
+    if (hearingBlock) systemPromptExtra += `\n\n${hearingBlock}`;
     if (partyBlock) systemPromptExtra += `\n\n${partyBlock}`;
     if (taskBlock) systemPromptExtra += `\n\n${taskBlock}`;
     if (attached_documents?.length) {

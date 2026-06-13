@@ -16,6 +16,7 @@ import type {
     ConflictCheckResponse,
     Project,
     ProjectDeadline,
+    ProjectHearing,
     ProjectMemory,
     MatterTemplate,
     ProjectParty,
@@ -530,6 +531,60 @@ export async function deleteProjectDeadline(
     deadlineId: string,
 ): Promise<void> {
     await apiRequest(`/projects/${projectId}/deadlines/${deadlineId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listProjectHearings(
+    projectId: string,
+): Promise<ProjectHearing[]> {
+    return apiRequest<ProjectHearing[]>(`/projects/${projectId}/hearings`);
+}
+
+export async function createProjectHearing(
+    projectId: string,
+    body: {
+        purpose: string;
+        hearing_date: string;
+        court?: string;
+        case_number?: string;
+        notes?: string;
+    },
+): Promise<ProjectHearing> {
+    return apiRequest<ProjectHearing>(`/projects/${projectId}/hearings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectHearing(
+    projectId: string,
+    hearingId: string,
+    body: {
+        purpose?: string;
+        hearing_date?: string;
+        court?: string | null;
+        case_number?: string | null;
+        notes?: string | null;
+        status?: ProjectHearing["status"];
+    },
+): Promise<ProjectHearing> {
+    return apiRequest<ProjectHearing>(
+        `/projects/${projectId}/hearings/${hearingId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectHearing(
+    projectId: string,
+    hearingId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/hearings/${hearingId}`, {
         method: "DELETE",
     });
 }
