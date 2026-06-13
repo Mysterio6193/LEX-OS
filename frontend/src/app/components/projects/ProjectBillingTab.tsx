@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { IndianRupee, Loader2, Plus, Receipt } from "lucide-react";
+import { IndianRupee, Loader2, Plus, Printer, Receipt } from "lucide-react";
 import { RowActions } from "@/app/components/shared/RowActions";
 import {
     createInvoice,
@@ -30,6 +30,164 @@ function rupee(n: number): string {
 
 function hoursLabel(minutes: number): string {
     return `${(minutes / 60).toFixed(2)} h`;
+}
+
+function esc(s: string | null | undefined): string {
+    return String(s ?? "").replace(
+        /[&<>"]/g,
+        (c) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+            })[c] as string,
+    );
+}
+
+// Number to Indian-system words (lakh/crore), for the invoice amount line.
+function numberToIndianWords(num: number): string {
+    const ones = [
+        "",
+        "One",
+        "Two",
+        "Three",
+        "Four",
+        "Five",
+        "Six",
+        "Seven",
+        "Eight",
+        "Nine",
+        "Ten",
+        "Eleven",
+        "Twelve",
+        "Thirteen",
+        "Fourteen",
+        "Fifteen",
+        "Sixteen",
+        "Seventeen",
+        "Eighteen",
+        "Nineteen",
+    ];
+    const tens = [
+        "",
+        "",
+        "Twenty",
+        "Thirty",
+        "Forty",
+        "Fifty",
+        "Sixty",
+        "Seventy",
+        "Eighty",
+        "Ninety",
+    ];
+    const twoDigits = (n: number): string => {
+        if (n < 20) return ones[n];
+        return `${tens[Math.floor(n / 10)]}${n % 10 ? ` ${ones[n % 10]}` : ""}`;
+    };
+    const threeDigits = (n: number): string => {
+        const h = Math.floor(n / 100);
+        const r = n % 100;
+        return `${h ? `${ones[h]} Hundred${r ? " " : ""}` : ""}${r ? twoDigits(r) : ""}`;
+    };
+    if (num === 0) return "Zero";
+    let words = "";
+    const crore = Math.floor(num / 10000000);
+    num %= 10000000;
+    const lakh = Math.floor(num / 100000);
+    num %= 100000;
+    const thousand = Math.floor(num / 1000);
+    num %= 1000;
+    const hundred = num;
+    if (crore) words += `${twoDigits(crore)} Crore `;
+    if (lakh) words += `${twoDigits(lakh)} Lakh `;
+    if (thousand) words += `${twoDigits(thousand)} Thousand `;
+    if (hundred) words += threeDigits(hundred);
+    return words.trim();
+}
+
+function amountInWords(total: number): string {
+    const rupees = Math.floor(total);
+    const paise = Math.round((total - rupees) * 100);
+    const r = `Rupees ${numberToIndianWords(rupees)}`;
+    const p = paise ? ` and ${numberToIndianWords(paise)} Paise` : "";
+    return `${r}${p} Only`;
+}
+
+function printInvoice(invoice: Invoice, settings: BillingSettings): void {
+    const tax = Number(invoice.cgst) + Number(invoice.sgst) + Number(invoice.igst);
+    const taxRows =
+        Number(invoice.igst) > 0
+            ? `<tr><td>IGST @ 18%</td><td class="r">${rupee(invoice.igst)}</td></tr>`
+            : `<tr><td>CGST @ 9%</td><td class="r">${rupee(invoice.cgst)}</td></tr>
+               <tr><td>SGST @ 9%</td><td class="r">${rupee(invoice.sgst)}</td></tr>`;
+    const lines = invoice.line_items
+        .map(
+            (li, i) =>
+                `<tr><td>${i + 1}</td><td>${esc(li.description)}</td><td class="r">${rupee(li.amount)}</td></tr>`,
+        )
+        .join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8" />
+<title>${esc(invoice.invoice_number)}</title>
+<style>
+  * { font-family: Georgia, "Times New Roman", serif; color: #1f2937; box-sizing: border-box; }
+  body { margin: 40px; font-size: 13px; }
+  h1 { font-size: 20px; letter-spacing: 2px; text-align: center; margin: 0 0 4px; }
+  .sub { text-align: center; color: #6b7280; font-size: 11px; margin-bottom: 20px; }
+  .row { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+  .box { flex: 1; }
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { border: 1px solid #d1d5db; padding: 7px 9px; text-align: left; font-size: 12px; }
+  th { background: #f3f4f6; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td.r, th.r { text-align: right; }
+  .totals { width: 280px; margin-left: auto; margin-top: 12px; }
+  .totals td { border: none; padding: 3px 9px; }
+  .grand td { border-top: 2px solid #1f2937; font-weight: bold; font-size: 14px; }
+  .words { margin-top: 10px; font-style: italic; font-size: 12px; }
+  .foot { margin-top: 32px; font-size: 11px; color: #6b7280; }
+  .sign { margin-top: 48px; text-align: right; font-size: 12px; }
+</style></head><body>
+  <h1>TAX INVOICE</h1>
+  <div class="sub">Legal Services · SAC ${esc(invoice.sac_code)}</div>
+  <div class="row">
+    <div class="box">
+      <div class="label">From</div>
+      <div>${settings.firm_gstin ? `GSTIN: ${esc(settings.firm_gstin)}` : "GSTIN: —"}</div>
+      <div>${settings.firm_state ? `State: ${esc(settings.firm_state)}` : ""}</div>
+    </div>
+    <div class="box">
+      <div class="label">Bill To</div>
+      <div>${esc(invoice.client_name) || "—"}</div>
+      <div>${invoice.client_gstin ? `GSTIN: ${esc(invoice.client_gstin)}` : ""}</div>
+      <div>${invoice.place_of_supply ? `Place of supply: ${esc(invoice.place_of_supply)}` : ""}</div>
+    </div>
+    <div class="box" style="text-align:right">
+      <div class="label">Invoice</div>
+      <div><strong>${esc(invoice.invoice_number)}</strong></div>
+      <div>Date: ${esc(invoice.invoice_date)}</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th style="width:32px">#</th><th>Description</th><th class="r" style="width:120px">Amount</th></tr></thead>
+    <tbody>${lines}</tbody>
+  </table>
+  <table class="totals">
+    <tr><td>Subtotal</td><td class="r">${rupee(invoice.subtotal)}</td></tr>
+    ${taxRows}
+    <tr><td>Total Tax</td><td class="r">${rupee(tax)}</td></tr>
+    <tr class="grand"><td>Total</td><td class="r">${rupee(invoice.total)}</td></tr>
+  </table>
+  <div class="words"><strong>Amount in words:</strong> ${esc(amountInWords(Number(invoice.total)))}</div>
+  ${invoice.notes ? `<div class="foot"><strong>Notes:</strong> ${esc(invoice.notes)}</div>` : ""}
+  <div class="foot">Tax is charged on legal services under SAC 9982.${Number(invoice.igst) > 0 ? " Inter-state supply (IGST)." : " Intra-state supply (CGST + SGST)."} This is a computer-generated invoice; verify GST treatment before issue.</div>
+  <div class="sign">For the Firm<br/><br/>_______________________<br/>Authorised Signatory</div>
+  <script>window.onload = function () { window.print(); };</script>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
 }
 
 export function ProjectBillingTab({
@@ -542,6 +700,7 @@ export function ProjectBillingTab({
                                     <th className="px-2 py-2 text-left">
                                         Status
                                     </th>
+                                    <th className="w-10 px-2 py-2" />
                                 </tr>
                             </thead>
                             <tbody>
@@ -595,6 +754,21 @@ export function ProjectBillingTab({
                                                     }`}
                                                 >
                                                     {inv.status}
+                                                </button>
+                                            </td>
+                                            <td className="px-2 py-2 text-right">
+                                                <button
+                                                    onClick={() =>
+                                                        printInvoice(
+                                                            inv,
+                                                            settings,
+                                                        )
+                                                    }
+                                                    title="Print / download as PDF"
+                                                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-[11px] text-gray-600 transition-colors hover:border-gray-400"
+                                                >
+                                                    <Printer className="h-3 w-3" />
+                                                    Print
                                                 </button>
                                             </td>
                                         </tr>
