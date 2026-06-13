@@ -28,37 +28,37 @@ lexOS is structured as a robust 4-tier architecture designed for low-latency ope
 
 ```mermaid
 graph TD
-    subgraph Layer 1: Memory & Knowledge Graph [The Brain]
+    subgraph L1["Layer 1: Memory & Knowledge Graph (The Brain)"]
         M1[Matter Memory]
         M2[Client Memory]
         M3[Firm Precedent Library]
         M4[Conflict Checking Registry]
     end
 
-    subgraph Layer 2: Intelligent AI Agents [The Staff]
+    subgraph L2["Layer 2: Intelligent AI Agents (The Staff)"]
         A1[Document Drafting Agent]
         A2[Case Law Research Agent]
         A3[Diligence & Checklist Agent]
         A4[Workflow Automation Agent]
     end
 
-    subgraph Layer 3: Workspace & Collaboration [The Office]
+    subgraph L3["Layer 3: Workspace & Collaboration (The Office)"]
         W1[Matter Dashboard]
         W2[Real-time Collaborative Editor]
         W3[Interactive Knowledge Search]
         W4[Timeline Aggregator]
     end
 
-    subgraph Layer 4: Integration & Infrastructure [The Foundation]
+    subgraph L4["Layer 4: Integration & Infrastructure (The Foundation)"]
         I1[DMS & Billing APIs]
         I2[Supabase DB / Auth]
         I3[Cloudflare R2 Storage]
         I4[Indian Kanoon Case Law API]
     end
 
-    Layer 1 --> Layer 2
-    Layer 2 --> Layer 3
-    Layer 3 --> Layer 4
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
 ```
 
 ### 💻 2.1 Technology Stack
