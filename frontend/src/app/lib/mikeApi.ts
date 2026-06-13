@@ -49,7 +49,19 @@ interface ServerChatDetailOut {
 const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 const isDev = process.env.NODE_ENV !== "production";
-const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+const getSupabaseUrl = () => {
+    try {
+        return process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
+    } catch {
+        return "https://placeholder-project.supabase.co";
+    }
+};
+
+const isDemoMode =
+    process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
+    getSupabaseUrl().includes("placeholder") ||
+    getSupabaseUrl().includes("your-project") ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL;
 const devLog = (...args: Parameters<typeof console.log>) => {
     if (isDev) console.log(...args);
 };
