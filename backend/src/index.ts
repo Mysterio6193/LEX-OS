@@ -176,6 +176,10 @@ app.use("/case-law", caseLawRouter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => {
-  console.log(`lexOS backend running on port ${PORT}`);
-});
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, () => {
+    console.log(`lexOS backend running on port ${PORT}`);
+  });
+}
+
+export default app;
