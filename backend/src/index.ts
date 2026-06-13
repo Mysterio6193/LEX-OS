@@ -175,5 +175,5 @@ app.use("/case-law", caseLawRouter);
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`Mike backend running on port ${PORT}`);
+  console.log(`lexOS backend running on port ${PORT}`);
 });

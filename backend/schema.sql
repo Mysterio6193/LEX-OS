@@ -1,4 +1,4 @@
--- Mike Supabase schema
+-- lexOS Supabase schema
 -- Use this for a fresh Supabase database. Existing deployments should continue
 -- to apply the incremental migration files in backend/oss-migrations instead.
 
