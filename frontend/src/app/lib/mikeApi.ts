@@ -19,6 +19,10 @@ import type {
     ProjectDeadline,
     ProjectHearing,
     ProjectMemory,
+    BillingSettings,
+    TimeEntry,
+    Invoice,
+    InvoiceLineItem,
     MatterTemplate,
     ProjectParty,
     ProjectTask,
@@ -619,6 +623,114 @@ export async function deleteProjectHearing(
     await apiRequest(`/projects/${projectId}/hearings/${hearingId}`, {
         method: "DELETE",
     });
+}
+
+// --- Billing: firm settings, time entries, GST invoices ---
+
+export async function getBillingSettings(): Promise<BillingSettings> {
+    return apiRequest<BillingSettings>(`/billing/settings`);
+}
+
+export async function updateBillingSettings(body: {
+    firm_gstin?: string | null;
+    firm_state?: string | null;
+    default_hourly_rate?: number | null;
+}): Promise<BillingSettings> {
+    return apiRequest<BillingSettings>(`/billing/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function listTimeEntries(
+    projectId: string,
+): Promise<TimeEntry[]> {
+    return apiRequest<TimeEntry[]>(
+        `/projects/${projectId}/billing/time-entries`,
+    );
+}
+
+export async function createTimeEntry(
+    projectId: string,
+    body: {
+        description: string;
+        minutes: number;
+        entry_date?: string;
+        rate?: number;
+    },
+): Promise<TimeEntry> {
+    return apiRequest<TimeEntry>(
+        `/projects/${projectId}/billing/time-entries`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function updateTimeEntry(
+    projectId: string,
+    entryId: string,
+    body: { description?: string; billed?: boolean },
+): Promise<TimeEntry> {
+    return apiRequest<TimeEntry>(
+        `/projects/${projectId}/billing/time-entries/${entryId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteTimeEntry(
+    projectId: string,
+    entryId: string,
+): Promise<void> {
+    await apiRequest(
+        `/projects/${projectId}/billing/time-entries/${entryId}`,
+        { method: "DELETE" },
+    );
+}
+
+export async function listInvoices(projectId: string): Promise<Invoice[]> {
+    return apiRequest<Invoice[]>(`/projects/${projectId}/billing/invoices`);
+}
+
+export async function createInvoice(
+    projectId: string,
+    body: {
+        invoice_date?: string;
+        client_name?: string;
+        client_gstin?: string;
+        place_of_supply?: string;
+        time_entry_ids?: string[];
+        line_items?: InvoiceLineItem[];
+        notes?: string;
+    },
+): Promise<Invoice> {
+    return apiRequest<Invoice>(`/projects/${projectId}/billing/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateInvoiceStatus(
+    projectId: string,
+    invoiceId: string,
+    status: Invoice["status"],
+): Promise<Invoice> {
+    return apiRequest<Invoice>(
+        `/projects/${projectId}/billing/invoices/${invoiceId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+        },
+    );
 }
 
 export async function listProjectParties(

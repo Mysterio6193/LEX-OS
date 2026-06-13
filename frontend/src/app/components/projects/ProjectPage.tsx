@@ -92,6 +92,7 @@ import { ProjectReviewsTab } from "./ProjectReviewsTab";
 import { ProjectMemoryTab } from "./ProjectMemoryTab";
 import { ProjectDeadlinesTab } from "./ProjectDeadlinesTab";
 import { ProjectHearingsTab } from "./ProjectHearingsTab";
+import { ProjectBillingTab } from "./ProjectBillingTab";
 import { ProjectPartiesTab } from "./ProjectPartiesTab";
 import { ProjectTimelineTab } from "./ProjectTimelineTab";
 import { ProjectTasksTab } from "./ProjectTasksTab";
@@ -288,7 +289,8 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
         tabParam === "hearings" ||
         tabParam === "parties" ||
         tabParam === "timeline" ||
-        tabParam === "tasks"
+        tabParam === "tasks" ||
+        tabParam === "billing"
             ? tabParam
             : initialTab;
     const [addDocsOpen, setAddDocsOpen] = useState(false);
@@ -2683,6 +2685,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                     { id: "hearings", label: "Hearings" },
                     { id: "tasks", label: "Checklist" },
                     { id: "parties", label: "Parties" },
+                    { id: "billing", label: "Billing" },
                     { id: "timeline", label: "Timeline" },
                 ]}
                 active={tab}
@@ -3530,6 +3533,14 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                     {/* Tab: Hearings */}
                     {tab === "hearings" && (
                         <ProjectHearingsTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Billing */}
+                    {tab === "billing" && (
+                        <ProjectBillingTab
                             projectId={projectId}
                             search={search}
                         />

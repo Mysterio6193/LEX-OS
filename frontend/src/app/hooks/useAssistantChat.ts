@@ -614,6 +614,16 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "time_entry_saved") {
+              pushEvent({
+                type: "time_entry_saved",
+                time_entry_id: data.time_entry_id as string,
+                description: data.description as string,
+                minutes: (data.minutes as number) ?? 0,
+              });
+              continue;
+            }
+
             if (data.type === "party_saved") {
               pushEvent({
                 type: "party_saved",

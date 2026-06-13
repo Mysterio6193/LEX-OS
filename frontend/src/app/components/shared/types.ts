@@ -175,6 +175,12 @@ export type AssistantEvent =
       court?: string | null;
     }
   | {
+      type: "time_entry_saved";
+      time_entry_id: string;
+      description: string;
+      minutes: number;
+    }
+  | {
       type: "party_saved";
       party_id: string;
       name: string;
@@ -538,6 +544,57 @@ export interface ProjectHearing {
   source_chat_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Time tracking & GST invoices (India billing)
+
+export interface TimeEntry {
+  id: string;
+  project_id: string;
+  user_id: string;
+  entry_date: string;
+  description: string;
+  minutes: number;
+  rate: number;
+  amount: number;
+  billed: boolean;
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceLineItem {
+  description: string;
+  amount: number;
+}
+
+export interface Invoice {
+  id: string;
+  project_id: string;
+  user_id: string;
+  invoice_number: string;
+  invoice_date: string;
+  client_name: string | null;
+  client_gstin: string | null;
+  place_of_supply: string | null;
+  sac_code: string;
+  line_items: InvoiceLineItem[];
+  subtotal: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+  status: "draft" | "sent" | "paid";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BillingSettings {
+  firm_gstin: string | null;
+  firm_state: string | null;
+  default_hourly_rate: number | null;
 }
 
 // Matter Parties / conflict checking
