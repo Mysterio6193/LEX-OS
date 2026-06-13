@@ -42,6 +42,7 @@ import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 import { saveProjectDeadline } from "./projectDeadlines";
 import { saveProjectHearing } from "./projectHearings";
 import { saveTimeEntry } from "./billing";
+import { computeLimitation, listLimitationKeys } from "./limitation";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
@@ -443,6 +444,30 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "compute_limitation",
+      description:
+        "Compute the last date for filing under Indian limitation law (Limitation Act 1963 and special statutes) from a trigger/cause-of-action date. Use when the user asks about limitation, the last date to file, or whether something is time-barred for a recognised Indian cause (suit on contract/money, possession, appeal, SLP, review, S.34 arbitration challenge, S.138 cheque complaint, consumer complaint, etc.). Report the due date and days remaining, state the statutory basis, note any condonation caveat, and offer to save it as a deadline (save_deadline). Always tell the user this is advisory and to verify.",
+      parameters: {
+        type: "object",
+        properties: {
+          limitation_key: {
+            type: "string",
+            description:
+              "The limitation type key. Call with an empty key first if unsure to receive the list of available keys.",
+          },
+          trigger_date: {
+            type: "string",
+            description:
+              "The cause-of-action / trigger date in YYYY-MM-DD format (resolve relative dates against TODAY'S DATE).",
+          },
+        },
+        required: ["limitation_key", "trigger_date"],
       },
     },
   },
@@ -3100,6 +3125,29 @@ export async function runToolCalls(
           role: "tool",
           tool_call_id: tc.id,
           content: JSON.stringify({ ok: true, ...result }),
+        });
+      }
+    } else if (tc.function.name === "compute_limitation") {
+      const key = String(args.limitation_key ?? "").trim();
+      if (!key) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Specify a limitation_key.",
+            available_keys: listLimitationKeys(),
+          }),
+        });
+      } else {
+        const result = computeLimitation({
+          triggerDate: String(args.trigger_date ?? "").trim(),
+          key,
+        });
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result),
         });
       }
     } else if (tc.function.name === "read_table_cells" && tabularStore) {
