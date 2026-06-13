@@ -2045,6 +2045,21 @@ const DEFAULT_MATTER_TEMPLATES: MatterTemplate[] = [
             "Pay ad valorem court fees and file before the appropriate court",
             "Track issuance of summons and the next date",
         ]
+    },
+    {
+        id: "tpl-hearing-prep",
+        name: "Court Hearing Prep & Trial Briefing",
+        description: "Standard checklist for preparing for an upcoming crucial court hearing or trial argument.",
+        task_count: 7,
+        tasks: [
+            "Review cause list and confirm case slot/timing",
+            "Prepare compilation of precedents and statutory authorities",
+            "Conduct Indian Kanoon search on opposing counsel's citations",
+            "Draft brief note of arguments / synopsis of facts",
+            "Prepare list of dates and index of pleadings",
+            "Brief Senior Counsel on case strategy and arguments",
+            "Verify service of index and synopsis to Opposing Counsel"
+        ]
     }
 ];
 
@@ -2144,6 +2159,35 @@ const DEFAULT_WORKFLOWS: Workflow[] = [
         is_system: true,
         created_at: new Date().toISOString(),
         practice: "Corporate",
+        is_owner: false,
+    },
+    {
+        id: "wf-3",
+        user_id: null,
+        title: "Corporate Compliance Auditor",
+        type: "assistant",
+        prompt_md: "Act as a corporate compliance auditor. Scan the company records to identify any filing defaults (e.g. AOC-4, MGT-7), pending director board resolution approvals, or charges registered with the MCA.",
+        columns_config: null,
+        is_system: true,
+        created_at: new Date().toISOString(),
+        practice: "Corporate Law",
+        is_owner: false,
+    },
+    {
+        id: "wf-4",
+        user_id: null,
+        title: "S.138 NI Act Checklist Auditor",
+        type: "tabular",
+        prompt_md: null,
+        columns_config: [
+            { index: 0, name: "Statutory Notice Served Date", prompt: "Identify the date when the statutory demand notice was successfully served on the drawer.", format: "date" },
+            { index: 1, name: "Notice Period Expiry", prompt: "Calculate the exact expiry date of the 15-day notice response window.", format: "date" },
+            { index: 2, name: "Is Complaint within Limitation?", prompt: "Is the complaint filed within the 30-day limitation window starting from the notice period expiry?", format: "yes_no" },
+            { index: 3, name: "Pecuniary Threshold Crosses?", prompt: "Is the cheque amount above 10,000 INR?", format: "yes_no" }
+        ],
+        is_system: true,
+        created_at: new Date().toISOString(),
+        practice: "Criminal Law",
         is_owner: false,
     }
 ];
