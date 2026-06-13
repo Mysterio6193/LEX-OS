@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+    BookMarked,
     Download,
     Eye,
     EyeOff,
@@ -33,6 +34,9 @@ interface Props {
     deleteDisabled?: boolean;
     onRename?: () => void;
     onUpdateCmNumber?: () => void;
+    onTogglePrecedent?: () => void;
+    /** Current precedent state; drives the toggle's menu label. */
+    isPrecedent?: boolean;
     newSubfolderLabel?: string;
     renameLabel?: string;
     deleteLabel?: string;
@@ -51,6 +55,8 @@ export function RowActionMenuItems({
     deleteDisabled = false,
     onRename,
     onUpdateCmNumber,
+    onTogglePrecedent,
+    isPrecedent = false,
     newSubfolderLabel = "New subfolder",
     renameLabel = "Rename",
     deleteLabel = "Delete",
@@ -83,6 +89,15 @@ export function RowActionMenuItems({
                 >
                     <Hash className="h-3.5 w-3.5" />
                     Edit CM No.
+                </button>
+            )}
+            {onTogglePrecedent && (
+                <button
+                    onClick={() => { onClose(); onTogglePrecedent(); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs text-left text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                    <BookMarked className="h-3.5 w-3.5 shrink-0" />
+                    {isPrecedent ? "Remove from precedents" : "Mark as precedent"}
                 </button>
             )}
             {onDownload && (

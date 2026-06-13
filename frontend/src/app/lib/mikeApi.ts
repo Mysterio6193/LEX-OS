@@ -9,10 +9,19 @@ import type {
     Chat,
     ChatDetailOut,
     CitationAnnotation,
+    Client,
     Document,
     Folder,
     Message,
+    ConflictCheckResponse,
     Project,
+    ProjectDeadline,
+    ProjectHearing,
+    ProjectMemory,
+    MatterTemplate,
+    ProjectParty,
+    ProjectTask,
+    TimelineResponse,
     Workflow,
     TabularReview,
     TabularReviewDetailOut,
@@ -161,9 +170,24 @@ async function toApiError(response: Response, path: string) {
 // Projects
 // ---------------------------------------------------------------------------
 
-export async function listProjects(): Promise<Project[]> {
+export async function listProjects(
+    includeArchived = false,
+): Promise<Project[]> {
     if (isDemoMode) return mockApi.listProjects();
-    return apiRequest<Project[]>("/projects");
+    return apiRequest<Project[]>(
+        includeArchived ? "/projects?include_archived=true" : "/projects",
+    );
+}
+
+export async function cloneProject(
+    projectId: string,
+    name?: string,
+): Promise<Project> {
+    return apiRequest<Project>(`/projects/${projectId}/clone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(name ? { name } : {}),
+    });
 }
 
 export async function createProject(
@@ -314,7 +338,14 @@ export async function updateProject(
     payload: {
         name?: string;
         cm_number?: string;
+        client_id?: string | null;
         shared_with?: string[];
+        archived?: boolean;
+        matter_type?: string | null;
+        court?: string | null;
+        case_number?: string | null;
+        jurisdiction?: string | null;
+        filing_date?: string | null;
     },
 ): Promise<Project> {
     if (isDemoMode) return mockApi.updateProject(projectId, payload);
@@ -328,6 +359,53 @@ export async function updateProject(
 export async function deleteProject(projectId: string): Promise<void> {
     if (isDemoMode) return mockApi.deleteProject(projectId);
     await apiRequest(`/projects/${projectId}`, { method: "DELETE" });
+}
+
+export async function setDocumentPrecedent(
+    projectId: string,
+    documentId: string,
+    isPrecedent: boolean,
+): Promise<{ id: string; is_precedent: boolean }> {
+    return apiRequest<{ id: string; is_precedent: boolean }>(
+        `/projects/${projectId}/documents/${documentId}/precedent`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_precedent: isPrecedent }),
+        },
+    );
+}
+
+// Clients
+
+export async function listClients(): Promise<Client[]> {
+    return apiRequest<Client[]>("/clients");
+}
+
+export async function createClient(body: {
+    name: string;
+    notes?: string;
+}): Promise<Client> {
+    return apiRequest<Client>("/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateClient(
+    clientId: string,
+    body: { name?: string; notes?: string | null },
+): Promise<Client> {
+    return apiRequest<Client>(`/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function deleteClient(clientId: string): Promise<void> {
+    await apiRequest(`/clients/${clientId}`, { method: "DELETE" });
 }
 
 export interface ProjectPeople {
@@ -368,6 +446,280 @@ export async function createProjectFolder(
             parent_folder_id: parentFolderId ?? null,
         }),
     });
+}
+
+export async function listProjectMemories(
+    projectId: string,
+): Promise<ProjectMemory[]> {
+    return apiRequest<ProjectMemory[]>(`/projects/${projectId}/memory`);
+}
+
+export async function createProjectMemory(
+    projectId: string,
+    body: { kind: ProjectMemory["kind"]; content: string },
+): Promise<ProjectMemory> {
+    return apiRequest<ProjectMemory>(`/projects/${projectId}/memory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectMemory(
+    projectId: string,
+    memoryId: string,
+    body: { kind?: ProjectMemory["kind"]; content?: string },
+): Promise<ProjectMemory> {
+    return apiRequest<ProjectMemory>(
+        `/projects/${projectId}/memory/${memoryId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectMemory(
+    projectId: string,
+    memoryId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/memory/${memoryId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listProjectDeadlines(
+    projectId: string,
+): Promise<ProjectDeadline[]> {
+    return apiRequest<ProjectDeadline[]>(`/projects/${projectId}/deadlines`);
+}
+
+export async function createProjectDeadline(
+    projectId: string,
+    body: { title: string; due_date: string; notes?: string },
+): Promise<ProjectDeadline> {
+    return apiRequest<ProjectDeadline>(`/projects/${projectId}/deadlines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectDeadline(
+    projectId: string,
+    deadlineId: string,
+    body: {
+        title?: string;
+        due_date?: string;
+        notes?: string | null;
+        status?: ProjectDeadline["status"];
+    },
+): Promise<ProjectDeadline> {
+    return apiRequest<ProjectDeadline>(
+        `/projects/${projectId}/deadlines/${deadlineId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectDeadline(
+    projectId: string,
+    deadlineId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/deadlines/${deadlineId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listProjectHearings(
+    projectId: string,
+): Promise<ProjectHearing[]> {
+    return apiRequest<ProjectHearing[]>(`/projects/${projectId}/hearings`);
+}
+
+export async function createProjectHearing(
+    projectId: string,
+    body: {
+        purpose: string;
+        hearing_date: string;
+        court?: string;
+        case_number?: string;
+        notes?: string;
+    },
+): Promise<ProjectHearing> {
+    return apiRequest<ProjectHearing>(`/projects/${projectId}/hearings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectHearing(
+    projectId: string,
+    hearingId: string,
+    body: {
+        purpose?: string;
+        hearing_date?: string;
+        court?: string | null;
+        case_number?: string | null;
+        notes?: string | null;
+        status?: ProjectHearing["status"];
+    },
+): Promise<ProjectHearing> {
+    return apiRequest<ProjectHearing>(
+        `/projects/${projectId}/hearings/${hearingId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectHearing(
+    projectId: string,
+    hearingId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/hearings/${hearingId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listProjectParties(
+    projectId: string,
+): Promise<ProjectParty[]> {
+    return apiRequest<ProjectParty[]>(`/projects/${projectId}/parties`);
+}
+
+export async function createProjectParty(
+    projectId: string,
+    body: { name: string; role: ProjectParty["role"]; notes?: string },
+): Promise<ProjectParty> {
+    return apiRequest<ProjectParty>(`/projects/${projectId}/parties`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectParty(
+    projectId: string,
+    partyId: string,
+    body: {
+        name?: string;
+        role?: ProjectParty["role"];
+        notes?: string | null;
+    },
+): Promise<ProjectParty> {
+    return apiRequest<ProjectParty>(
+        `/projects/${projectId}/parties/${partyId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectParty(
+    projectId: string,
+    partyId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/parties/${partyId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function runConflictCheck(body: {
+    names?: string[];
+    project_id?: string;
+}): Promise<ConflictCheckResponse> {
+    return apiRequest<ConflictCheckResponse>(`/conflicts/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function getProjectTimeline(
+    projectId: string,
+    opts?: { before?: string; limit?: number },
+): Promise<TimelineResponse> {
+    const params = new URLSearchParams();
+    if (opts?.before) params.set("before", opts.before);
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return apiRequest<TimelineResponse>(
+        `/projects/${projectId}/timeline${qs ? `?${qs}` : ""}`,
+    );
+}
+
+export async function listProjectTasks(
+    projectId: string,
+): Promise<ProjectTask[]> {
+    return apiRequest<ProjectTask[]>(`/projects/${projectId}/tasks`);
+}
+
+export async function createProjectTask(
+    projectId: string,
+    body: { title: string; notes?: string },
+): Promise<ProjectTask> {
+    return apiRequest<ProjectTask>(`/projects/${projectId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateProjectTask(
+    projectId: string,
+    taskId: string,
+    body: {
+        title?: string;
+        notes?: string | null;
+        status?: ProjectTask["status"];
+        position?: number;
+    },
+): Promise<ProjectTask> {
+    return apiRequest<ProjectTask>(
+        `/projects/${projectId}/tasks/${taskId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteProjectTask(
+    projectId: string,
+    taskId: string,
+): Promise<void> {
+    await apiRequest(`/projects/${projectId}/tasks/${taskId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function listMatterTemplates(): Promise<MatterTemplate[]> {
+    return apiRequest<MatterTemplate[]>(`/matter-templates`);
+}
+
+export async function applyMatterTemplate(
+    projectId: string,
+    templateId: string,
+): Promise<{ added: number; tasks: ProjectTask[] }> {
+    return apiRequest<{ added: number; tasks: ProjectTask[] }>(
+        `/projects/${projectId}/tasks/apply-template`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template_id: templateId }),
+        },
+    );
 }
 
 export async function renameProjectFolder(

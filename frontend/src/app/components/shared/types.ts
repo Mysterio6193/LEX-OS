@@ -10,13 +10,33 @@ export interface Folder {
   updated_at: string;
 }
 
+export interface Client {
+  id: string;
+  user_id: string;
+  name: string;
+  notes: string | null;
+  project_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;
   is_owner?: boolean;
   name: string;
   cm_number: string | null;
+  client_id?: string | null;
+  /** Resolved client (id + name) when the project is linked to one. */
+  client?: { id: string; name: string } | null;
   shared_with: string[];
+  archived_at?: string | null;
+  /** Court / forum metadata (India litigation). */
+  matter_type?: string | null;
+  court?: string | null;
+  case_number?: string | null;
+  jurisdiction?: string | null;
+  filing_date?: string | null;
   created_at: string;
   updated_at: string;
   documents?: Document[];
@@ -40,6 +60,8 @@ export interface Document {
   size_bytes: number | null;
   page_count: number | null;
   structure_tree: StructureNode[] | null;
+  /** Firm precedent: available to the assistant in all the owner's project chats. */
+  is_precedent?: boolean;
   status: "pending" | "processing" | "ready" | "error";
   created_at: string | null;
   updated_at?: string | null;
@@ -133,6 +155,47 @@ export type AssistantEvent =
       isStreaming?: boolean;
     }
   | { type: "workflow_applied"; workflow_id: string; title: string }
+  | {
+      type: "memory_saved";
+      memory_id: string;
+      kind: string;
+      content: string;
+    }
+  | {
+      type: "deadline_saved";
+      deadline_id: string;
+      title: string;
+      due_date: string;
+    }
+  | {
+      type: "hearing_saved";
+      hearing_id: string;
+      purpose: string;
+      hearing_date: string;
+      court?: string | null;
+    }
+  | {
+      type: "party_saved";
+      party_id: string;
+      name: string;
+      role: string;
+    }
+  | {
+      type: "task_saved";
+      task_id: string;
+      title: string;
+    }
+  | {
+      type: "conflict_check";
+      names: string[];
+      match_count: number;
+      conflict_count: number;
+    }
+  | {
+      type: "firm_knowledge_searched";
+      query: string;
+      hit_count: number;
+    }
   | {
       type: "doc_edited";
       filename: string;
@@ -425,6 +488,142 @@ export interface TabularCell {
   } | null;
   status: "pending" | "generating" | "done" | "error";
   created_at: string;
+}
+
+// Matter Memory
+
+export type ProjectMemoryKind = "decision" | "fact" | "preference";
+
+export interface ProjectMemory {
+  id: string;
+  project_id: string;
+  user_id: string;
+  kind: ProjectMemoryKind;
+  content: string;
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Matter Deadlines
+
+export interface ProjectDeadline {
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  due_date: string;
+  notes: string | null;
+  status: "pending" | "done";
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Court hearings (cause list)
+
+export interface ProjectHearing {
+  id: string;
+  project_id: string;
+  user_id: string;
+  purpose: string;
+  court: string | null;
+  case_number: string | null;
+  hearing_date: string;
+  notes: string | null;
+  status: "scheduled" | "adjourned" | "done";
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Matter Parties / conflict checking
+
+export type ProjectPartyRole =
+  | "client"
+  | "counterparty"
+  | "opposing_counsel"
+  | "witness"
+  | "other";
+
+export interface ProjectParty {
+  id: string;
+  project_id: string;
+  user_id: string;
+  name: string;
+  role: ProjectPartyRole;
+  notes: string | null;
+  source: "assistant" | "user";
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConflictMatch {
+  matched_name: string;
+  match_kind: "client" | "party";
+  role: string | null;
+  match_strength: "exact" | "strong" | "partial";
+  severity: "potential_conflict" | "related_match";
+  project: { id: string; name: string } | null;
+  client: { id: string; name: string } | null;
+}
+
+export interface ConflictCheckResponse {
+  queries: { name: string; matches: ConflictMatch[] }[];
+  checked_at: string;
+}
+
+// Matter checklists / templates
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  notes: string | null;
+  status: "pending" | "done";
+  position: number;
+  source: "assistant" | "user" | "template";
+  template_id: string | null;
+  source_chat_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatterTemplate {
+  id: string;
+  name: string;
+  description: string;
+  task_count: number;
+  tasks: string[];
+}
+
+// Matter timeline
+
+export type TimelineEventType =
+  | "document_created"
+  | "document_version"
+  | "chat_created"
+  | "memory_saved"
+  | "deadline_created"
+  | "party_added";
+
+export interface TimelineEvent {
+  id: string;
+  type: TimelineEventType;
+  at: string;
+  title: string;
+  detail?: string;
+  refs?: { document_id?: string; chat_id?: string; version_id?: string };
+}
+
+export interface TimelineResponse {
+  events: TimelineEvent[];
+  next_before: string | null;
 }
 
 // Workflows

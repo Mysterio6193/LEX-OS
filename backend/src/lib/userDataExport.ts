@@ -168,6 +168,7 @@ export async function buildUserAccountExport(
     const [
         profile,
         apiKeys,
+        clients,
         projects,
         standaloneDocuments,
         workflows,
@@ -182,6 +183,9 @@ export async function buildUserAccountExport(
     ] = await Promise.all([
         selectAll(db, "user_profiles", (query) => query.eq("user_id", userId)),
         loadApiKeyStatus(db, userId),
+        selectAll(db, "clients", (query) =>
+            query.eq("user_id", userId).order("created_at", { ascending: true }),
+        ),
         selectAll(db, "projects", (query) =>
             query.eq("user_id", userId).order("created_at", { ascending: true }),
         ),
@@ -245,11 +249,26 @@ export async function buildUserAccountExport(
     const documentIds = idsFrom(documents);
     const reviewIds = idsFrom(tabularReviews);
 
-    const [folders, versions, edits, tabularCells] = await Promise.all([
+    const [
+        folders,
+        versions,
+        edits,
+        tabularCells,
+        projectMemories,
+        projectDeadlines,
+        projectHearings,
+        projectParties,
+        projectTasks,
+    ] = await Promise.all([
         selectByIds(db, "project_subfolders", "project_id", projectIds),
         selectByIds(db, "document_versions", "document_id", documentIds),
         selectByIds(db, "document_edits", "document_id", documentIds),
         selectByIds(db, "tabular_cells", "review_id", reviewIds),
+        selectByIds(db, "project_memories", "project_id", projectIds),
+        selectByIds(db, "project_deadlines", "project_id", projectIds),
+        selectByIds(db, "project_hearings", "project_id", projectIds),
+        selectByIds(db, "project_parties", "project_id", projectIds),
+        selectByIds(db, "project_tasks", "project_id", projectIds),
     ]);
 
     return {
@@ -257,8 +276,14 @@ export async function buildUserAccountExport(
         user: { id: userId, email: userEmail ?? null },
         profile,
         api_keys: apiKeys,
+        clients,
         projects,
         project_subfolders: folders,
+        project_memories: projectMemories,
+        project_deadlines: projectDeadlines,
+        project_hearings: projectHearings,
+        project_parties: projectParties,
+        project_tasks: projectTasks,
         documents,
         document_versions: versions,
         document_edits: edits,

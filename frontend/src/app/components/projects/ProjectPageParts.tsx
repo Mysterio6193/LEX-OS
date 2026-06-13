@@ -2,6 +2,8 @@
 
 import { type CSSProperties, useRef, useState } from "react";
 import {
+    Archive,
+    Copy,
     CornerDownRight,
     File,
     FileText,
@@ -19,7 +21,17 @@ import type { DocumentVersion } from "@/app/lib/mikeApi";
 import { RowActions } from "@/app/components/shared/RowActions";
 import { HeaderActionsMenu } from "@/app/components/shared/HeaderActionsMenu";
 
-export type ProjectTab = "documents" | "assistant" | "reviews";
+export type ProjectTab =
+    | "overview"
+    | "documents"
+    | "assistant"
+    | "reviews"
+    | "memory"
+    | "deadlines"
+    | "hearings"
+    | "parties"
+    | "timeline"
+    | "tasks";
 
 export type ProjectContextMenu = {
     x: number;
@@ -363,6 +375,8 @@ export function ProjectPageHeader({
     onOwnerOnly,
     onOpenDetails,
     onDeleteProject,
+    onCloneProject,
+    onToggleArchive,
     onSearchChange,
     onOpenPeople,
     onNewChat,
@@ -378,6 +392,8 @@ export function ProjectPageHeader({
     onOwnerOnly: (action: string) => void;
     onOpenDetails: () => void;
     onDeleteProject: () => void;
+    onCloneProject: () => void;
+    onToggleArchive: () => void;
     onSearchChange: (search: string) => void;
     onOpenPeople: () => void;
     onNewChat: () => void;
@@ -452,6 +468,18 @@ export function ProjectPageHeader({
                                         label: "Project Details",
                                         icon: Info,
                                         onSelect: onOpenDetails,
+                                    },
+                                    {
+                                        label: "Clone matter",
+                                        icon: Copy,
+                                        onSelect: onCloneProject,
+                                    },
+                                    {
+                                        label: project?.archived_at
+                                            ? "Unarchive"
+                                            : "Archive",
+                                        icon: Archive,
+                                        onSelect: onToggleArchive,
                                     },
                                     {
                                         label: "Delete",

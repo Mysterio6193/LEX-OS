@@ -582,6 +582,76 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "memory_saved") {
+              pushEvent({
+                type: "memory_saved",
+                memory_id: data.memory_id as string,
+                kind: data.kind as string,
+                content: data.content as string,
+              });
+              continue;
+            }
+
+            if (data.type === "deadline_saved") {
+              pushEvent({
+                type: "deadline_saved",
+                deadline_id: data.deadline_id as string,
+                title: data.title as string,
+                due_date: data.due_date as string,
+              });
+              continue;
+            }
+
+            if (data.type === "hearing_saved") {
+              pushEvent({
+                type: "hearing_saved",
+                hearing_id: data.hearing_id as string,
+                purpose: data.purpose as string,
+                hearing_date: data.hearing_date as string,
+                court:
+                  typeof data.court === "string" ? data.court : undefined,
+              });
+              continue;
+            }
+
+            if (data.type === "party_saved") {
+              pushEvent({
+                type: "party_saved",
+                party_id: data.party_id as string,
+                name: data.name as string,
+                role: data.role as string,
+              });
+              continue;
+            }
+
+            if (data.type === "task_saved") {
+              pushEvent({
+                type: "task_saved",
+                task_id: data.task_id as string,
+                title: data.title as string,
+              });
+              continue;
+            }
+
+            if (data.type === "conflict_check") {
+              pushEvent({
+                type: "conflict_check",
+                names: (data.names as string[]) ?? [],
+                match_count: (data.match_count as number) ?? 0,
+                conflict_count: (data.conflict_count as number) ?? 0,
+              });
+              continue;
+            }
+
+            if (data.type === "firm_knowledge_searched") {
+              pushEvent({
+                type: "firm_knowledge_searched",
+                query: (data.query as string) ?? "",
+                hit_count: (data.hit_count as number) ?? 0,
+              });
+              continue;
+            }
+
             if (data.type === "case_citation") {
               pushEvent({
                 type: "case_citation",

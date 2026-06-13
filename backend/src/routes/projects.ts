@@ -99,26 +99,54 @@ async function attachDocumentOwnerLabels(
   }
 }
 
+/**
+ * Resolve a project's linked client to {id, name} for API responses. The
+ * lookup is by id only (no user_id scope) so shared project members can see
+ * which client the matter is for even though the client record belongs to
+ * the project owner.
+ */
+async function loadProjectClient(
+  db: ReturnType<typeof createServerSupabase>,
+  clientId: unknown,
+): Promise<{ id: string; name: string } | null> {
+  if (typeof clientId !== "string" || !clientId) return null;
+  const { data } = await db
+    .from("clients")
+    .select("id, name")
+    .eq("id", clientId)
+    .single();
+  return (data as { id: string; name: string } | null) ?? null;
+}
+
 // GET /projects
 projectsRouter.get("/", requireAuth, async (req, res) => {
   const userId = res.locals.userId as string;
   const userEmail = res.locals.userEmail as string;
+  // Archived matters are hidden unless explicitly requested (CM-10).
+  const includeArchived = req.query.include_archived === "true";
   const db = createServerSupabase();
 
-  const { data: ownProjects, error: ownError } = await db
+  let ownQuery = db
     .from("projects")
     .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
+  if (!includeArchived) ownQuery = ownQuery.is("archived_at", null);
+  const { data: ownProjects, error: ownError } = await ownQuery;
   if (ownError) return void res.status(500).json({ detail: ownError.message });
 
-  const { data: sharedProjects, error: sharedError } = userEmail
-    ? await db
+  let sharedQuery = userEmail
+    ? db
         .from("projects")
         .select("*")
         .filter("shared_with", "cs", JSON.stringify([userEmail]))
         .neq("user_id", userId)
         .order("created_at", { ascending: false })
+    : null;
+  if (sharedQuery && !includeArchived)
+    sharedQuery = sharedQuery.is("archived_at", null);
+  const { data: sharedProjects, error: sharedError } = sharedQuery
+    ? await sharedQuery
     : { data: [], error: null };
   if (sharedError)
     return void res.status(500).json({ detail: sharedError.message });
@@ -200,6 +228,119 @@ projectsRouter.post("/", requireAuth, async (req, res) => {
   res.status(201).json({ ...data, documents: [] });
 });
 
+// POST /projects/:projectId/clone — start a new matter from an existing
+// one (CM-08). Copies the matter's knowledge — parties, checklist tasks
+// (reset to pending), and durable memories (facts/preferences, not
+// matter-specific decisions) plus the client link — into a fresh project
+// owned by the caller. Documents and chats are NOT copied.
+projectsRouter.post("/:projectId/clone", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const userEmail = res.locals.userEmail as string | undefined;
+  const { projectId } = req.params;
+  const { name } = req.body as { name?: string };
+  const db = createServerSupabase();
+
+  const access = await checkProjectAccess(projectId, userId, userEmail, db);
+  if (!access.ok)
+    return void res.status(404).json({ detail: "Project not found" });
+
+  const { data: source } = await db
+    .from("projects")
+    .select("id, name, client_id")
+    .eq("id", projectId)
+    .single();
+  if (!source)
+    return void res.status(404).json({ detail: "Project not found" });
+
+  // The client link only carries over when the client belongs to the
+  // caller (a shared member cloning someone else's matter gets no link).
+  let clientId: string | null = null;
+  if (source.client_id) {
+    const { data: client } = await db
+      .from("clients")
+      .select("id")
+      .eq("id", source.client_id)
+      .eq("user_id", userId)
+      .single();
+    clientId = client ? (source.client_id as string) : null;
+  }
+
+  const newName =
+    typeof name === "string" && name.trim()
+      ? name.trim()
+      : `${source.name} (copy)`;
+  const { data: created, error: createError } = await db
+    .from("projects")
+    .insert({
+      user_id: userId,
+      name: newName.slice(0, 300),
+      cm_number: null,
+      shared_with: [],
+      client_id: clientId,
+    })
+    .select("*")
+    .single();
+  if (createError || !created)
+    return void res.status(500).json({ detail: "Failed to clone project" });
+  const newProjectId = created.id as string;
+
+  const [{ data: parties }, { data: tasks }, { data: memories }] =
+    await Promise.all([
+      db
+        .from("project_parties")
+        .select("name, role, notes, source")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true }),
+      db
+        .from("project_tasks")
+        .select("title, notes, position, source, template_id")
+        .eq("project_id", projectId)
+        .order("position", { ascending: true }),
+      db
+        .from("project_memories")
+        .select("kind, content, source")
+        .eq("project_id", projectId)
+        .in("kind", ["fact", "preference"])
+        .order("created_at", { ascending: true }),
+    ]);
+
+  if (parties?.length) {
+    await db.from("project_parties").insert(
+      parties.map((p) => ({
+        ...p,
+        project_id: newProjectId,
+        user_id: userId,
+      })),
+    );
+  }
+  if (tasks?.length) {
+    await db.from("project_tasks").insert(
+      tasks.map((t) => ({
+        ...t,
+        status: "pending",
+        project_id: newProjectId,
+        user_id: userId,
+      })),
+    );
+  }
+  if (memories?.length) {
+    await db.from("project_memories").insert(
+      memories.map((m) => ({
+        ...m,
+        project_id: newProjectId,
+        user_id: userId,
+      })),
+    );
+  }
+
+  res.status(201).json({
+    ...created,
+    is_owner: true,
+    documents: [],
+    folders: [],
+  });
+});
+
 // GET /projects/:projectId
 projectsRouter.get("/:projectId", requireAuth, async (req, res) => {
   const userId = res.locals.userId as string;
@@ -238,6 +379,7 @@ projectsRouter.get("/:projectId", requireAuth, async (req, res) => {
   res.json({
     ...project,
     is_owner: project.user_id === userId,
+    client: await loadProjectClient(db, project.client_id),
     documents: docsTyped,
     folders: folderData ?? [],
   });
@@ -339,6 +481,23 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
   const updates: Record<string, unknown> = {};
   if (req.body.name != null) updates.name = req.body.name;
   if (req.body.cm_number != null) updates.cm_number = req.body.cm_number;
+  if (req.body.client_id !== undefined) {
+    const clientId = req.body.client_id as string | null;
+    if (clientId !== null) {
+      // Only the project owner reaches the update below, so the client
+      // must belong to the same user.
+      const clientDb = createServerSupabase();
+      const { data: client } = await clientDb
+        .from("clients")
+        .select("id")
+        .eq("id", clientId)
+        .eq("user_id", userId)
+        .single();
+      if (!client)
+        return void res.status(400).json({ detail: "Client not found" });
+    }
+    updates.client_id = clientId;
+  }
   if (Array.isArray(req.body.shared_with)) {
     // Normalise: lowercase + dedupe + drop empties.
     const normalizedUserEmail = userEmail?.trim().toLowerCase();
@@ -357,6 +516,25 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
       cleaned.push(e);
     }
     updates.shared_with = cleaned;
+  }
+  if (typeof req.body.archived === "boolean") {
+    updates.archived_at = req.body.archived
+      ? new Date().toISOString()
+      : null;
+  }
+  // Court / forum metadata (India litigation). Empty string clears the field.
+  for (const field of [
+    "matter_type",
+    "court",
+    "case_number",
+    "jurisdiction",
+    "filing_date",
+  ] as const) {
+    if (req.body[field] !== undefined) {
+      const raw = req.body[field];
+      const value = typeof raw === "string" ? raw.trim() : raw;
+      updates[field] = value === "" || value == null ? null : value;
+    }
   }
 
   const db = createServerSupabase();
@@ -381,7 +559,12 @@ projectsRouter.patch("/:projectId", requireAuth, async (req, res) => {
   }[];
   await attachActiveVersionPaths(db, docsTyped);
   await attachDocumentOwnerLabels(db, docsTyped);
-  res.json({ ...data, documents: docsTyped, folders: folderData ?? [] });
+  res.json({
+    ...data,
+    client: await loadProjectClient(db, data.client_id),
+    documents: docsTyped,
+    folders: folderData ?? [],
+  });
 });
 
 // DELETE /projects/:projectId
@@ -665,6 +848,45 @@ projectsRouter.patch("/:projectId/documents/:documentId", requireAuth, async (re
     filename,
   });
 });
+
+// PATCH /projects/:projectId/documents/:documentId/precedent — mark or
+// unmark a document as a firm precedent. Owner-of-doc only: precedents are
+// loaded into all of that user's project chats, so shared members may not
+// publish someone else's document into their own precedent library.
+projectsRouter.patch(
+  "/:projectId/documents/:documentId/precedent",
+  requireAuth,
+  async (req, res) => {
+    const userId = res.locals.userId as string;
+    const userEmail = res.locals.userEmail as string | undefined;
+    const { projectId, documentId } = req.params;
+    const isPrecedent = req.body?.is_precedent;
+    if (typeof isPrecedent !== "boolean")
+      return void res
+        .status(400)
+        .json({ detail: "is_precedent must be a boolean" });
+    const db = createServerSupabase();
+
+    const access = await checkProjectAccess(projectId, userId, userEmail, db);
+    if (!access.ok)
+      return void res.status(404).json({ detail: "Project not found" });
+
+    const { data: updated, error } = await db
+      .from("documents")
+      .update({
+        is_precedent: isPrecedent,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId)
+      .eq("project_id", projectId)
+      .eq("user_id", userId)
+      .select("id, is_precedent")
+      .single();
+    if (error || !updated)
+      return void res.status(404).json({ detail: "Document not found" });
+    res.json(updated);
+  },
+);
 
 // POST /projects/:projectId/documents
 projectsRouter.post(

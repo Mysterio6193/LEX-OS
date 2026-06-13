@@ -864,6 +864,191 @@ function WorkflowAppliedBlock({
     );
 }
 
+function MemorySavedBlock({
+    kind,
+    content,
+    showConnector,
+}: {
+    kind: string;
+    content: string;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">
+                    Saved {kind === "fact" ? "fact" : kind} to matter memory
+                </span>{" "}
+                <span>{content}</span>
+            </div>
+        </div>
+    );
+}
+
+function DeadlineSavedBlock({
+    title,
+    dueDate,
+    showConnector,
+}: {
+    title: string;
+    dueDate: string;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Saved deadline</span>{" "}
+                <span>
+                    {title} — due {dueDate}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function HearingSavedBlock({
+    purpose,
+    hearingDate,
+    court,
+    showConnector,
+}: {
+    purpose: string;
+    hearingDate: string;
+    court?: string | null;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Saved hearing</span>{" "}
+                <span>
+                    {purpose} — {hearingDate}
+                    {court ? ` at ${court}` : ""}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function PartySavedBlock({
+    name,
+    role,
+    showConnector,
+}: {
+    name: string;
+    role: string;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Recorded party</span>{" "}
+                <span>
+                    {name} ({role.replace(/_/g, " ")})
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function TaskSavedBlock({
+    title,
+    showConnector,
+}: {
+    title: string;
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Added task</span>{" "}
+                <span>{title}</span>
+            </div>
+        </div>
+    );
+}
+
+function ConflictCheckBlock({
+    names,
+    matchCount,
+    conflictCount,
+    showConnector,
+}: {
+    names: string[];
+    matchCount: number;
+    conflictCount: number;
+    showConnector?: boolean;
+}) {
+    const detail =
+        conflictCount > 0
+            ? `${conflictCount} potential ${conflictCount === 1 ? "conflict" : "conflicts"}`
+            : matchCount > 0
+              ? `${matchCount} related ${matchCount === 1 ? "match" : "matches"}, no potential conflicts`
+              : "no matches";
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div
+                className={`mt-2 w-1.5 h-1.5 rounded-full shrink-0 ${conflictCount > 0 ? "bg-red-400" : "bg-emerald-400"}`}
+            />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Checked conflicts</span>{" "}
+                <span>
+                    for {names.join(", ")} — {detail}
+                </span>
+            </div>
+        </div>
+    );
+}
+
+function FirmKnowledgeBlock({
+    query,
+    hitCount,
+    showConnector,
+}: {
+    query: string;
+    hitCount: number;
+    showConnector?: boolean;
+}) {
+    const detail = `${hitCount} ${hitCount === 1 ? "result" : "results"}`;
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-indigo-400 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Searched firm knowledge</span>{" "}
+                <span>
+                    for “{query}” — {detail}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 type IndianKanoonBlockItem = {
     caseName: string | null;
     citation: string | null;
@@ -2010,6 +2195,77 @@ export function AssistantMessage({
                             ? () => onWorkflowClick(event.workflow_id)
                             : undefined
                     }
+                />
+            );
+        }
+        if (event.type === "memory_saved") {
+            return (
+                <MemorySavedBlock
+                    key={globalIdx}
+                    kind={event.kind}
+                    content={event.content}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "deadline_saved") {
+            return (
+                <DeadlineSavedBlock
+                    key={globalIdx}
+                    title={event.title}
+                    dueDate={event.due_date}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "hearing_saved") {
+            return (
+                <HearingSavedBlock
+                    key={globalIdx}
+                    purpose={event.purpose}
+                    hearingDate={event.hearing_date}
+                    court={event.court}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "party_saved") {
+            return (
+                <PartySavedBlock
+                    key={globalIdx}
+                    name={event.name}
+                    role={event.role}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "task_saved") {
+            return (
+                <TaskSavedBlock
+                    key={globalIdx}
+                    title={event.title}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "conflict_check") {
+            return (
+                <ConflictCheckBlock
+                    key={globalIdx}
+                    names={event.names}
+                    matchCount={event.match_count}
+                    conflictCount={event.conflict_count}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "firm_knowledge_searched") {
+            return (
+                <FirmKnowledgeBlock
+                    key={globalIdx}
+                    query={event.query}
+                    hitCount={event.hit_count}
+                    showConnector={showConnector}
                 />
             );
         }

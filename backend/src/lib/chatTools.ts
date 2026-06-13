@@ -38,6 +38,13 @@ import {
   type OpenAIToolSchema,
 } from "./llm";
 import { safeErrorMessage } from "./safeError";
+import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
+import { saveProjectDeadline } from "./projectDeadlines";
+import { saveProjectHearing } from "./projectHearings";
+import { PARTY_ROLES, saveProjectParty } from "./projectParties";
+import { runConflictCheck } from "./conflicts";
+import { saveProjectTask } from "./projectTasks";
+import { searchFirmKnowledge } from "./firmKnowledge";
 
 const STANDARD_FONT_DATA_URL = (() => {
   try {
@@ -229,6 +236,185 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["doc_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_memory",
+      description:
+        "Save an important decision, fact, or preference to this matter's persistent memory. Memory survives across chats: every future conversation in this project will see saved entries. Use it when the user makes a clear decision (e.g. 'we accept the 12-month liability cap'), states a durable fact about the matter (e.g. 'the counterparty is governed by German law'), or expresses a lasting preference (e.g. 'always draft indemnities aggressively for this client'). Do NOT save transient context, speculation, document summaries, or anything already in MATTER MEMORY.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["decision", "fact", "preference"],
+            description:
+              "What kind of entry this is: a decision the user made, a durable fact about the matter, or a lasting preference.",
+          },
+          content: {
+            type: "string",
+            description:
+              "The entry to remember, written as one or two self-contained sentences understandable without this conversation's context.",
+          },
+        },
+        required: ["kind", "content"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_deadline",
+      description:
+        "Save a date-bound obligation to this matter's deadline tracker. Every future conversation in this project will see pending deadlines, and they appear in the project's Deadlines tab. Use it when the user mentions a concrete deadline (e.g. 'the filing is due 30 June', 'closing is scheduled for 15 July', 'respond to the counterparty by Friday' — resolve relative dates to a calendar date first). Do NOT save vague timeframes without a date, or deadlines already listed in MATTER DEADLINES.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description:
+              "Short description of the obligation (e.g. 'File statement of defence').",
+          },
+          due_date: {
+            type: "string",
+            description: "Due date in YYYY-MM-DD format.",
+          },
+          notes: {
+            type: "string",
+            description:
+              "Optional extra context (who is responsible, what triggers it, consequences of missing it).",
+          },
+        },
+        required: ["title", "due_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_hearing",
+      description:
+        "Record a court hearing (cause-list entry) for this matter. Every future conversation will see upcoming hearings, and they appear in the project's Hearings tab. Use it when the user mentions a court listing or next date (e.g. 'listed before the High Court on 12 July for arguments', 'adjourned to 3 August'). Resolve relative dates against TODAY'S DATE. Do NOT record hearings already listed in COURT HEARINGS.",
+      parameters: {
+        type: "object",
+        properties: {
+          purpose: {
+            type: "string",
+            description:
+              "Purpose or stage of the hearing (e.g. 'Arguments on interim application', 'Framing of issues').",
+          },
+          hearing_date: {
+            type: "string",
+            description: "Hearing date in YYYY-MM-DD format.",
+          },
+          court: {
+            type: "string",
+            description:
+              "Court or forum, if stated (e.g. 'High Court of Delhi').",
+          },
+          case_number: {
+            type: "string",
+            description: "Case number, if stated.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional extra context.",
+          },
+        },
+        required: ["purpose", "hearing_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_party",
+      description:
+        "Record a party connected to this matter (client, counterparty, opposing counsel, witness). Every future conversation in this project will see recorded parties, they appear in the project's Parties tab, and conflict checks match them across all the user's matters. Use it when the conversation establishes who is involved in the matter (e.g. 'the counterparty is Acme GmbH', 'we act for Northwind Ltd'). Do NOT record parties already listed in MATTER PARTIES.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description:
+              "The party's name as commonly written (e.g. 'Acme Holdings Ltd').",
+          },
+          role: {
+            type: "string",
+            enum: [...PARTY_ROLES],
+            description: "The party's role in this matter.",
+          },
+          notes: {
+            type: "string",
+            description:
+              "Optional context (e.g. who they are represented by, their relationship to the client).",
+          },
+        },
+        required: ["name", "role"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_task",
+      description:
+        "Add an action item to this matter's checklist. Every future conversation in this project will see pending tasks, and they appear in the project's Checklist tab. Use it when the conversation establishes concrete work to be done (e.g. 'we still need to get the board resolution', 'prepare a markup of clause 7'). Do NOT save vague intentions, completed work, or items already listed in MATTER CHECKLIST.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description:
+              "Short imperative description of the task (e.g. 'Prepare markup of clause 7').",
+          },
+          notes: {
+            type: "string",
+            description:
+              "Optional context (who asked for it, what it depends on).",
+          },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "check_conflicts",
+      description:
+        "Run a conflict-of-interest check of one or more entity names against all of the user's matters, recorded parties, and clients. Use when the user asks about conflicts or introduces a new prospective client, counterparty, or adverse party. Returns matches with the role each matched entity plays elsewhere and a severity flag. Report potential conflicts plainly and recommend lawyer review — never declare a name cleared.",
+      parameters: {
+        type: "object",
+        properties: {
+          names: {
+            type: "array",
+            items: { type: "string" },
+            description: "Entity names to check (e.g. ['Acme GmbH']).",
+          },
+        },
+        required: ["names"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_firm_knowledge",
+      description:
+        "Search across ALL of the user's matters — memories, deadlines, checklist tasks, parties, clients, and document filenames — for a keyword or phrase. Use when the user asks how the firm has handled something before, or for prior matters, precedents, or institutional knowledge beyond the current matter (e.g. 'how do we usually structure earn-outs', 'have we acted against Acme before'). Each result is labeled with the matter it came from; cite that matter when you use it.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Keyword or phrase to search for across all matters.",
+          },
+        },
+        required: ["query"],
       },
     },
   },
@@ -1967,6 +2153,47 @@ export type DocCreatedResult = {
   version_number?: number | null;
 };
 
+export type MemorySavedResult = {
+  memory_id: string;
+  kind: string;
+  content: string;
+};
+
+export type DeadlineSavedResult = {
+  deadline_id: string;
+  title: string;
+  due_date: string;
+};
+
+export type HearingSavedResult = {
+  hearing_id: string;
+  purpose: string;
+  hearing_date: string;
+  court?: string | null;
+};
+
+export type TaskSavedResult = {
+  task_id: string;
+  title: string;
+};
+
+export type PartySavedResult = {
+  party_id: string;
+  name: string;
+  role: string;
+};
+
+export type FirmKnowledgeSearchedResult = {
+  query: string;
+  hit_count: number;
+};
+
+export type ConflictCheckResultEvent = {
+  names: string[];
+  match_count: number;
+  conflict_count: number;
+};
+
 export type DocReplicatedResult = {
   /** Filename of the source document being copied. */
   filename: string;
@@ -2292,6 +2519,8 @@ export async function runToolCalls(
   projectId?: string | null,
   indiankanoonState?: IndiankanoonTurnState,
   apiKeys?: import("./llm").UserApiKeys,
+  chatId?: string | null,
+  userEmail?: string | null,
 ): Promise<{
   toolResults: unknown[];
   docsRead: { filename: string; document_id?: string }[];
@@ -2300,6 +2529,13 @@ export async function runToolCalls(
   docsReplicated: DocReplicatedResult[];
   workflowsApplied: { workflow_id: string; title: string }[];
   docsEdited: DocEditedResult[];
+  memoriesSaved: MemorySavedResult[];
+  deadlinesSaved: DeadlineSavedResult[];
+  hearingsSaved: HearingSavedResult[];
+  partiesSaved: PartySavedResult[];
+  conflictChecks: ConflictCheckResultEvent[];
+  firmKnowledgeSearches: FirmKnowledgeSearchedResult[];
+  tasksSaved: TaskSavedResult[];
   indiankanoonEvents: IndiankanoonToolEvent[];
   caseCitationEvents: CaseCitationEvent[];
 }> {
@@ -2314,6 +2550,13 @@ export async function runToolCalls(
   const docsReplicated: DocReplicatedResult[] = [];
   const workflowsApplied: { workflow_id: string; title: string }[] = [];
   const docsEdited: DocEditedResult[] = [];
+  const memoriesSaved: MemorySavedResult[] = [];
+  const deadlinesSaved: DeadlineSavedResult[] = [];
+  const hearingsSaved: HearingSavedResult[] = [];
+  const partiesSaved: PartySavedResult[] = [];
+  const conflictChecks: ConflictCheckResultEvent[] = [];
+  const firmKnowledgeSearches: FirmKnowledgeSearchedResult[] = [];
+  const tasksSaved: TaskSavedResult[] = [];
   const indiankanoonEvents: IndiankanoonToolEvent[] = [];
   const caseCitationEvents: CaseCitationEvent[] = [];
   const courtState: IndiankanoonTurnState =
@@ -2473,6 +2716,308 @@ export async function runToolCalls(
         tool_call_id: tc.id,
         content: wf ? wf.prompt_md : `Workflow '${wfId}' not found.`,
       });
+    } else if (tc.function.name === "save_memory") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Matter memory is only available inside project chats.",
+          }),
+        });
+      } else {
+        const kind = normalizeMemoryKind(args.kind);
+        const saved = await saveProjectMemory({
+          projectId,
+          userId,
+          kind,
+          content: String(args.content ?? ""),
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: MemorySavedResult = {
+            memory_id: saved.id,
+            kind,
+            content: String(args.content ?? "").trim(),
+          };
+          memoriesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "memory_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, memory_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_deadline") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Matter deadlines are only available inside project chats.",
+          }),
+        });
+      } else {
+        const title = String(args.title ?? "").trim();
+        const dueDate = String(args.due_date ?? "").trim();
+        const saved = await saveProjectDeadline({
+          projectId,
+          userId,
+          title,
+          dueDate,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: DeadlineSavedResult = {
+            deadline_id: saved.id,
+            title,
+            due_date: dueDate,
+          };
+          deadlinesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "deadline_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, deadline_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_hearing") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Court hearings are only available inside project chats.",
+          }),
+        });
+      } else {
+        const purpose = String(args.purpose ?? "").trim();
+        const hearingDate = String(args.hearing_date ?? "").trim();
+        const court =
+          typeof args.court === "string" ? args.court : null;
+        const saved = await saveProjectHearing({
+          projectId,
+          userId,
+          purpose,
+          hearingDate,
+          court,
+          caseNumber:
+            typeof args.case_number === "string" ? args.case_number : null,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: HearingSavedResult = {
+            hearing_id: saved.id,
+            purpose,
+            hearing_date: hearingDate,
+            court,
+          };
+          hearingsSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "hearing_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, hearing_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_task") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error:
+              "Matter checklists are only available inside project chats.",
+          }),
+        });
+      } else {
+        const title = String(args.title ?? "").trim();
+        const saved = await saveProjectTask({
+          projectId,
+          userId,
+          title,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: TaskSavedResult = {
+            task_id: saved.id,
+            title,
+          };
+          tasksSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "task_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, task_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_party") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Matter parties are only available inside project chats.",
+          }),
+        });
+      } else {
+        const name = String(args.name ?? "").trim();
+        const role = String(args.role ?? "other").trim();
+        const saved = await saveProjectParty({
+          projectId,
+          userId,
+          name,
+          role,
+          notes: typeof args.notes === "string" ? args.notes : null,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: PartySavedResult = {
+            party_id: saved.id,
+            name,
+            role,
+          };
+          partiesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "party_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, party_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "check_conflicts") {
+      const rawNames = Array.isArray(args.names) ? args.names : [];
+      const names = rawNames
+        .map((n) => String(n ?? "").trim())
+        .filter(Boolean);
+      if (names.length === 0) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Provide at least one name to check.",
+          }),
+        });
+      } else {
+        const result = await runConflictCheck({
+          names,
+          userId,
+          userEmail,
+          excludeProjectId: projectId ?? null,
+          db,
+        });
+        const matchCount = result.queries.reduce(
+          (sum, q) => sum + q.matches.length,
+          0,
+        );
+        const conflictCount = result.queries.reduce(
+          (sum, q) =>
+            sum +
+            q.matches.filter((m) => m.severity === "potential_conflict")
+              .length,
+          0,
+        );
+        const event: ConflictCheckResultEvent = {
+          names,
+          match_count: matchCount,
+          conflict_count: conflictCount,
+        };
+        conflictChecks.push(event);
+        write(
+          `data: ${JSON.stringify({ type: "conflict_check", ...event })}\n\n`,
+        );
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({ ok: true, ...result }),
+        });
+      }
+    } else if (tc.function.name === "search_firm_knowledge") {
+      const query = String(args.query ?? "").trim();
+      if (!query) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Provide a search query.",
+          }),
+        });
+      } else {
+        const result = await searchFirmKnowledge({
+          query,
+          userId,
+          userEmail,
+          db,
+        });
+        const event: FirmKnowledgeSearchedResult = {
+          query: result.query,
+          hit_count: result.hits.length,
+        };
+        firmKnowledgeSearches.push(event);
+        write(
+          `data: ${JSON.stringify({ type: "firm_knowledge_searched", ...event })}\n\n`,
+        );
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({ ok: true, ...result }),
+        });
+      }
     } else if (tc.function.name === "read_table_cells" && tabularStore) {
       const colIndices = args.col_indices as number[] | undefined;
       const rowIndices = args.row_indices as number[] | undefined;
@@ -3615,6 +4160,13 @@ export async function runToolCalls(
     docsReplicated,
     workflowsApplied,
     docsEdited,
+    memoriesSaved,
+    deadlinesSaved,
+    hearingsSaved,
+    partiesSaved,
+    conflictChecks,
+    firmKnowledgeSearches,
+    tasksSaved,
     indiankanoonEvents,
     caseCitationEvents,
   };
@@ -3829,6 +4381,29 @@ type AssistantEvent =
       }[];
     }
   | { type: "workflow_applied"; workflow_id: string; title: string }
+  | { type: "memory_saved"; memory_id: string; kind: string; content: string }
+  | {
+      type: "deadline_saved";
+      deadline_id: string;
+      title: string;
+      due_date: string;
+    }
+  | {
+      type: "hearing_saved";
+      hearing_id: string;
+      purpose: string;
+      hearing_date: string;
+      court?: string | null;
+    }
+  | { type: "party_saved"; party_id: string; name: string; role: string }
+  | { type: "task_saved"; task_id: string; title: string }
+  | {
+      type: "conflict_check";
+      names: string[];
+      match_count: number;
+      conflict_count: number;
+    }
+  | { type: "firm_knowledge_searched"; query: string; hit_count: number }
   | {
       type: "doc_edited";
       filename: string;
@@ -3900,6 +4475,10 @@ export async function runLLMStream(params: {
    * generated docs still get persisted, but as standalone documents.
    */
   projectId?: string | null;
+  /** Chat the turn belongs to; recorded as the source of saved memories. */
+  chatId?: string | null;
+  /** Caller's email; lets check_conflicts cover matters shared with them. */
+  userEmail?: string | null;
 }): Promise<{
   fullText: string;
   events: AssistantEvent[];
@@ -3921,6 +4500,8 @@ export async function runLLMStream(params: {
     apiKeys,
     signal,
     projectId,
+    chatId,
+    userEmail,
   } = params;
   const researchTools = includeResearchTools ? INDIANKANOON_TOOLS : [];
   const baseTools = [...TOOLS, ...researchTools, ...WORKFLOW_TOOLS];
@@ -4127,6 +4708,13 @@ export async function runLLMStream(params: {
           docsReplicated,
           workflowsApplied,
           docsEdited,
+          memoriesSaved,
+          deadlinesSaved,
+          hearingsSaved,
+          partiesSaved,
+          conflictChecks,
+          firmKnowledgeSearches,
+          tasksSaved,
           indiankanoonEvents,
           caseCitationEvents,
         } = await runToolCalls(
@@ -4142,6 +4730,8 @@ export async function runLLMStream(params: {
           projectId,
         indiankanoonTurnState,
         apiKeys,
+        chatId,
+        userEmail,
       );
         throwIfAborted(signal);
         for (const r of docsRead) {
@@ -4182,6 +4772,61 @@ export async function runLLMStream(params: {
             type: "workflow_applied",
             workflow_id: wf.workflow_id,
             title: wf.title,
+          });
+        }
+        for (const m of memoriesSaved) {
+          events.push({
+            type: "memory_saved",
+            memory_id: m.memory_id,
+            kind: m.kind,
+            content: m.content,
+          });
+        }
+        for (const d of deadlinesSaved) {
+          events.push({
+            type: "deadline_saved",
+            deadline_id: d.deadline_id,
+            title: d.title,
+            due_date: d.due_date,
+          });
+        }
+        for (const h of hearingsSaved) {
+          events.push({
+            type: "hearing_saved",
+            hearing_id: h.hearing_id,
+            purpose: h.purpose,
+            hearing_date: h.hearing_date,
+            court: h.court,
+          });
+        }
+        for (const p of partiesSaved) {
+          events.push({
+            type: "party_saved",
+            party_id: p.party_id,
+            name: p.name,
+            role: p.role,
+          });
+        }
+        for (const c of conflictChecks) {
+          events.push({
+            type: "conflict_check",
+            names: c.names,
+            match_count: c.match_count,
+            conflict_count: c.conflict_count,
+          });
+        }
+        for (const f of firmKnowledgeSearches) {
+          events.push({
+            type: "firm_knowledge_searched",
+            query: f.query,
+            hit_count: f.hit_count,
+          });
+        }
+        for (const t of tasksSaved) {
+          events.push({
+            type: "task_saved",
+            task_id: t.task_id,
+            title: t.title,
           });
         }
         for (const e of docsEdited) {
@@ -4394,9 +5039,12 @@ export async function buildDocContext(
   return { docIndex, docStore };
 }
 
+/** Folder-path label that marks precedent docs from other matters. */
+export const PRECEDENT_LIBRARY_PATH = "Precedent Library";
+
 export async function buildProjectDocContext(
   projectId: string,
-  _userId: string,
+  userId: string,
   db: ReturnType<typeof createServerSupabase>,
 ): Promise<{
   docIndex: DocIndex;
@@ -4473,6 +5121,49 @@ export async function buildProjectDocContext(
     });
     const path = resolvePath(doc.folder_id ?? null);
     if (path) folderPaths.set(docLabel, path);
+  }
+
+  // Precedent Library (PRD FM-02): the user's precedent documents from
+  // OTHER matters ride along in every project chat so the assistant can
+  // read, cite, and replicate them as drafting templates. Docs in this
+  // project are already listed above and are excluded to avoid duplicates.
+  const { data: precedents } = await db
+    .from("documents")
+    .select("id, current_version_id, status, project_id")
+    .eq("user_id", userId)
+    .eq("is_precedent", true)
+    .eq("status", "ready")
+    .order("created_at", { ascending: true });
+  const precedentList = (
+    (precedents ?? []) as unknown as {
+      id: string;
+      filename?: string | null;
+      file_type?: string | null;
+      current_version_id?: string | null;
+      active_version_number?: number | null;
+      project_id?: string | null;
+      storage_path?: string | null;
+    }[]
+  ).filter((doc) => doc.project_id !== projectId);
+  await attachActiveVersionPaths(db, precedentList);
+  let nextIndex = docList.length;
+  for (const doc of precedentList) {
+    if (!doc.storage_path) continue;
+    const docLabel = `doc-${nextIndex}`;
+    nextIndex += 1;
+    const filename = doc.filename?.trim() || "Untitled document";
+    docIndex[docLabel] = {
+      document_id: doc.id,
+      filename,
+      version_id: doc.current_version_id ?? null,
+      version_number: doc.active_version_number ?? null,
+    };
+    docStore.set(docLabel, {
+      storage_path: doc.storage_path,
+      file_type: doc.file_type ?? "",
+      filename,
+    });
+    folderPaths.set(docLabel, PRECEDENT_LIBRARY_PATH);
   }
 
   devLog(

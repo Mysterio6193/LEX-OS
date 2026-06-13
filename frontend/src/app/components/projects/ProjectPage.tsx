@@ -17,6 +17,7 @@ import {
     deleteProject,
     deleteDocument,
     createTabularReview,
+    cloneProject,
     updateProject,
     listProjectChats,
     deleteChat,
@@ -32,6 +33,7 @@ import {
     moveDocumentToFolder,
     moveSubfolderToFolder,
     renameProjectDocument,
+    setDocumentPrecedent,
     listDocumentVersions,
     uploadDocumentVersion,
     replaceDocumentVersionFile,
@@ -87,6 +89,13 @@ import { DocumentSidePanel } from "./DocumentSidePanel";
 import { ProjectDetailsModal } from "./ProjectDetailsModal";
 import { ProjectAssistantTab } from "./ProjectAssistantTab";
 import { ProjectReviewsTab } from "./ProjectReviewsTab";
+import { ProjectMemoryTab } from "./ProjectMemoryTab";
+import { ProjectDeadlinesTab } from "./ProjectDeadlinesTab";
+import { ProjectHearingsTab } from "./ProjectHearingsTab";
+import { ProjectPartiesTab } from "./ProjectPartiesTab";
+import { ProjectTimelineTab } from "./ProjectTimelineTab";
+import { ProjectTasksTab } from "./ProjectTasksTab";
+import { ProjectOverviewTab } from "./ProjectOverviewTab";
 
 interface Props {
     projectId: string;
@@ -262,7 +271,7 @@ function ProjectTableLoading({
     );
 }
 
-export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
+export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
     const [project, setProject] = useState<Project | null>(null);
     const [folders, setFolders] = useState<ProjectFolder[]>([]);
     const [chats, setChats] = useState<Chat[]>([]);
@@ -271,12 +280,21 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     const searchParams = useSearchParams();
     const tabParam = searchParams.get("tab");
     const tab: ProjectTab =
-        tabParam === "assistant" || tabParam === "reviews"
+        tabParam === "documents" ||
+        tabParam === "assistant" ||
+        tabParam === "reviews" ||
+        tabParam === "memory" ||
+        tabParam === "deadlines" ||
+        tabParam === "hearings" ||
+        tabParam === "parties" ||
+        tabParam === "timeline" ||
+        tabParam === "tasks"
             ? tabParam
             : initialTab;
     const [addDocsOpen, setAddDocsOpen] = useState(false);
     const [peopleModalOpen, setPeopleModalOpen] = useState(false);
     const [projectDetailsOpen, setProjectDetailsOpen] = useState(false);
+    const [cloningProject, setCloningProject] = useState(false);
     const [ownerOnlyAction, setOwnerOnlyAction] = useState<string | null>(null);
     const { user } = useAuth();
     const { profile } = useUserProfile();
@@ -602,11 +620,24 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     const [search, setSearch] = useState("");
 
     const router = useRouter();
-    const { saveChat } = useChatHistoryContext();
+    const { saveChat, setNewChatMessages } = useChatHistoryContext();
+
+    async function handleDraftStatusReport() {
+        setNewChatMessages([
+            {
+                role: "user",
+                content:
+                    "Draft a client-ready status report for this matter, summarising where things stand, upcoming deadlines, open items, and next steps.",
+            },
+        ]);
+        const id = await saveChat(projectId);
+        if (id) router.push(`/projects/${projectId}/assistant/chat/${id}`);
+        else setNewChatMessages(null);
+    }
 
     function handleTabChange(newTab: ProjectTab) {
         const base = `/projects/${projectId}`;
-        const url = newTab === "documents" ? base : `${base}?tab=${newTab}`;
+        const url = newTab === "overview" ? base : `${base}?tab=${newTab}`;
         router.push(url);
     }
 
@@ -1140,6 +1171,13 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
     async function handleProjectDetailsSave(values: {
         name: string;
         cmNumber: string;
+        clientId: string | null;
+        clientName: string | null;
+        matterType: string;
+        court: string;
+        caseNumber: string;
+        jurisdiction: string;
+        filingDate: string;
     }) {
         if (project && project.is_owner === false) {
             setOwnerOnlyAction("edit project details");
@@ -1151,6 +1189,12 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
         const updated = await updateProject(projectId, {
             name,
             cm_number: cmNumber,
+            client_id: values.clientId,
+            matter_type: values.matterType || null,
+            court: values.court || null,
+            case_number: values.caseNumber || null,
+            jurisdiction: values.jurisdiction || null,
+            filing_date: values.filingDate || null,
         });
         setProject((prev) =>
             prev
@@ -1158,6 +1202,20 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                       ...prev,
                       name: updated.name,
                       cm_number: updated.cm_number,
+                      client_id: updated.client_id ?? null,
+                      matter_type: updated.matter_type ?? null,
+                      court: updated.court ?? null,
+                      case_number: updated.case_number ?? null,
+                      jurisdiction: updated.jurisdiction ?? null,
+                      filing_date: updated.filing_date ?? null,
+                      client:
+                          updated.client ??
+                          (values.clientId && values.clientName
+                              ? {
+                                    id: values.clientId,
+                                    name: values.clientName,
+                                }
+                              : null),
                       updated_at: updated.updated_at,
                   }
                 : prev,
@@ -1171,6 +1229,41 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
         }
         setDeleteProjectStatus("idle");
         setDeleteProjectConfirmOpen(true);
+    }
+
+    async function handleCloneProject() {
+        if (!project || cloningProject) return;
+        setCloningProject(true);
+        try {
+            const created = await cloneProject(projectId);
+            router.push(`/projects/${created.id}`);
+        } catch {
+            setCloningProject(false);
+        }
+    }
+
+    async function handleToggleArchive() {
+        if (!project) return;
+        if (project.is_owner === false) {
+            setOwnerOnlyAction("archive this project");
+            return;
+        }
+        const archived = !project.archived_at;
+        try {
+            const updated = await updateProject(projectId, { archived });
+            setProject((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          archived_at:
+                              updated.archived_at ??
+                              (archived ? new Date().toISOString() : null),
+                      }
+                    : prev,
+            );
+        } catch {
+            /* leave state unchanged on failure */
+        }
     }
 
     async function confirmProjectDelete() {
@@ -1409,6 +1502,36 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
 
     function isSharedDocument(doc: Document | null | undefined): boolean {
         return !!(doc?.user_id && user?.id && doc.user_id !== user.id);
+    }
+
+    async function handleTogglePrecedent(doc: Document) {
+        const next = !doc.is_precedent;
+        setProject((prev) =>
+            prev
+                ? {
+                      ...prev,
+                      documents: (prev.documents ?? []).map((d) =>
+                          d.id === doc.id ? { ...d, is_precedent: next } : d,
+                      ),
+                  }
+                : prev,
+        );
+        try {
+            await setDocumentPrecedent(projectId, doc.id, next);
+        } catch {
+            setProject((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          documents: (prev.documents ?? []).map((d) =>
+                              d.id === doc.id
+                                  ? { ...d, is_precedent: doc.is_precedent }
+                                  : d,
+                          ),
+                      }
+                    : prev,
+            );
+        }
     }
 
     async function handleDropProjectFiles(files: File[]) {
@@ -1906,6 +2029,11 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                             {docName}
                                                         </span>
                                                     )}
+                                                    {doc.is_precedent && (
+                                                        <span className="inline-flex shrink-0 items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                                                            Precedent
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="ml-auto w-20 shrink-0 text-xs text-gray-500 uppercase truncate">
@@ -2008,6 +2136,19 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                                           doc.id,
                                                                       )
                                                                 : undefined
+                                                        }
+                                                        onTogglePrecedent={
+                                                            !isSharedDocument(
+                                                                doc,
+                                                            )
+                                                                ? () =>
+                                                                      void handleTogglePrecedent(
+                                                                          doc,
+                                                                      )
+                                                                : undefined
+                                                        }
+                                                        isPrecedent={
+                                                            !!doc.is_precedent
                                                         }
                                                         onDelete={() =>
                                                             requestRemoveDoc(
@@ -2523,6 +2664,8 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                 onOwnerOnly={setOwnerOnlyAction}
                 onOpenDetails={() => setProjectDetailsOpen(true)}
                 onDeleteProject={requestProjectDelete}
+                onCloneProject={() => void handleCloneProject()}
+                onToggleArchive={() => void handleToggleArchive()}
                 onSearchChange={setSearch}
                 onOpenPeople={() => setPeopleModalOpen(true)}
                 onNewChat={handleNewChat}
@@ -2531,9 +2674,16 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
 
             <ToolbarTabs
                 tabs={[
+                    { id: "overview", label: "Overview" },
                     { id: "documents", label: "Documents" },
                     { id: "assistant", label: "Assistant Chats" },
                     { id: "reviews", label: "Tabular Reviews" },
+                    { id: "memory", label: "Memory" },
+                    { id: "deadlines", label: "Deadlines" },
+                    { id: "hearings", label: "Hearings" },
+                    { id: "tasks", label: "Checklist" },
+                    { id: "parties", label: "Parties" },
+                    { id: "timeline", label: "Timeline" },
                 ]}
                 active={tab}
                 onChange={handleTabChange}
@@ -3211,6 +3361,19 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                                                                       )
                                                                 : undefined
                                                         }
+                                                        onTogglePrecedent={
+                                                            !isSharedDocument(
+                                                                menuDoc,
+                                                            )
+                                                                ? () =>
+                                                                      void handleTogglePrecedent(
+                                                                          menuDoc,
+                                                                      )
+                                                                : undefined
+                                                        }
+                                                        isPrecedent={
+                                                            !!menuDoc.is_precedent
+                                                        }
                                                         onDelete={() =>
                                                             requestRemoveDoc(
                                                                 menuDoc,
@@ -3345,6 +3508,64 @@ export function ProjectPage({ projectId, initialTab = "documents" }: Props) {
                             setSelectedReviewIds={setSelectedReviewIds}
                             setRenamingReviewId={setRenamingReviewId}
                             setRenameReviewValue={setRenameReviewValue}
+                        />
+                    )}
+
+                    {/* Tab: Memory */}
+                    {tab === "memory" && (
+                        <ProjectMemoryTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Deadlines */}
+                    {tab === "deadlines" && (
+                        <ProjectDeadlinesTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Hearings */}
+                    {tab === "hearings" && (
+                        <ProjectHearingsTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Parties */}
+                    {tab === "parties" && (
+                        <ProjectPartiesTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Timeline */}
+                    {tab === "timeline" && (
+                        <ProjectTimelineTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Checklist */}
+                    {tab === "tasks" && (
+                        <ProjectTasksTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Overview */}
+                    {tab === "overview" && (
+                        <ProjectOverviewTab
+                            projectId={projectId}
+                            project={project}
+                            onNavigate={handleTabChange}
+                            onDraftStatusReport={handleDraftStatusReport}
                         />
                     )}
                         </>

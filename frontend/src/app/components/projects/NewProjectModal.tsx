@@ -1,16 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Users, Upload } from "lucide-react";
 import {
     addDocumentToProject,
+    applyMatterTemplate,
     createProject,
+    listMatterTemplates,
     uploadProjectDocument,
 } from "@/app/lib/mikeApi";
 import { useDirectoryData } from "../shared/useDirectoryData";
 import { FileDirectory } from "../shared/FileDirectory";
 import { EmailPillInput } from "../shared/EmailPillInput";
-import type { Project } from "../shared/types";
+import type { MatterTemplate, Project } from "../shared/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { Modal } from "../shared/Modal";
 
@@ -35,6 +37,15 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
     const formId = "new-project-modal-form";
 
     const { loading: dirLoading, standaloneDocuments, projects: dirProjects } = useDirectoryData(open);
+
+    const [templates, setTemplates] = useState<MatterTemplate[]>([]);
+    const [templateId, setTemplateId] = useState("");
+    useEffect(() => {
+        if (!open || templates.length > 0) return;
+        listMatterTemplates()
+            .then(setTemplates)
+            .catch(() => {});
+    }, [open, templates.length]);
 
     if (!open) return null;
 
@@ -61,6 +72,9 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
             await Promise.all([
                 ...[...selectedDocIds].map((id) => addDocumentToProject(project.id, id).catch(() => {})),
                 ...pendingFiles.map((f) => uploadProjectDocument(project.id, f).catch(() => {})),
+                ...(templateId
+                    ? [applyMatterTemplate(project.id, templateId).catch(() => {})]
+                    : []),
             ]);
             onCreated({ ...project, document_count: selectedDocIds.size + pendingFiles.length });
             resetForm();
@@ -75,6 +89,7 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
     function resetForm() {
         setName("");
         setCmNumber("");
+        setTemplateId("");
         setSharedEmails([]);
         setShowMembers(false);
         setSelectedDocIds(new Set());
@@ -134,6 +149,19 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
                 />
 
                 <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <select
+                        value={templateId}
+                        onChange={(e) => setTemplateId(e.target.value)}
+                        title="Seed the matter's checklist from a template"
+                        className={`rounded-full border border-gray-200 px-3 py-1 text-xs hover:bg-gray-50 transition-colors focus:outline-none bg-transparent ${templateId ? "text-gray-600" : "text-gray-400"}`}
+                    >
+                        <option value="">No checklist template</option>
+                        {templates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                                {t.name} ({t.task_count} tasks)
+                            </option>
+                        ))}
+                    </select>
                     <button
                         type="button"
                         onClick={() => setShowMembers((v) => !v)}

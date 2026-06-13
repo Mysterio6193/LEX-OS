@@ -68,6 +68,27 @@ create index if not exists idx_user_api_keys_user
 alter table public.user_api_keys enable row level security;
 
 -- ---------------------------------------------------------------------------
+-- Clients
+-- ---------------------------------------------------------------------------
+--
+-- Per-client profiles (PRD CLM-01/CLM-02). Each user maintains clients with
+-- free-form preference notes; projects link to a client via
+-- projects.client_id (added below) and the client profile is injected into
+-- linked project chats.
+
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  name text not null,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_clients_user
+  on public.clients(user_id);
+
+-- ---------------------------------------------------------------------------
 -- Projects and documents
 -- ---------------------------------------------------------------------------
 
@@ -88,6 +109,30 @@ create index if not exists idx_projects_user
 create index if not exists projects_shared_with_idx
   on public.projects using gin (shared_with);
 
+alter table public.projects
+  add column if not exists client_id uuid
+  references public.clients(id) on delete set null;
+
+create index if not exists idx_projects_client
+  on public.projects(client_id);
+
+-- Matter archival (PRD CM-10): set = archived (hidden from default lists).
+alter table public.projects
+  add column if not exists archived_at timestamptz;
+
+-- Court / forum metadata (India litigation): cause-title basics so the
+-- assistant knows the forum and the Overview can surface it.
+alter table public.projects
+  add column if not exists matter_type text;
+alter table public.projects
+  add column if not exists court text;
+alter table public.projects
+  add column if not exists case_number text;
+alter table public.projects
+  add column if not exists jurisdiction text;
+alter table public.projects
+  add column if not exists filing_date date;
+
 create table if not exists public.project_subfolders (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects(id) on delete cascade,
@@ -107,9 +152,14 @@ create table if not exists public.documents (
   user_id text not null,
   status text not null default 'pending',
   folder_id uuid references public.project_subfolders(id) on delete set null,
+  is_precedent boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists idx_documents_precedent
+  on public.documents(user_id)
+  where is_precedent;
 
 create index if not exists idx_documents_user_project
   on public.documents(user_id, project_id);
@@ -298,6 +348,143 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Matter memory
+-- ---------------------------------------------------------------------------
+--
+-- Persistent per-project memory entries (decisions, facts, preferences).
+-- Saved by the assistant via the save_memory tool or curated by users in
+-- the project's Memory tab, then injected into every project chat's
+-- system prompt so the assistant retains matter context across sessions.
+
+create table if not exists public.project_memories (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  kind text not null default 'fact'
+    check (kind in ('decision', 'fact', 'preference')),
+  content text not null,
+  source text not null default 'assistant'
+    check (source in ('assistant', 'user')),
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_memories_project
+  on public.project_memories(project_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Matter deadlines
+-- ---------------------------------------------------------------------------
+--
+-- Per-project deadline tracking (PRD WA-02). Saved by the assistant via the
+-- save_deadline tool or managed by users in the project's Deadlines tab.
+-- Upcoming deadlines are injected into every project chat's system prompt.
+
+create table if not exists public.project_deadlines (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  title text not null,
+  due_date date not null,
+  notes text,
+  status text not null default 'pending'
+    check (status in ('pending', 'done')),
+  source text not null default 'user'
+    check (source in ('assistant', 'user')),
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_deadlines_project
+  on public.project_deadlines(project_id, due_date);
+
+-- ---------------------------------------------------------------------------
+-- Court hearings (cause list)
+-- ---------------------------------------------------------------------------
+--
+-- Per-matter hearing tracker (India litigation). Saved by the assistant via
+-- the save_hearing tool or managed by users in the project's Hearings tab.
+-- Upcoming hearings are injected into every project chat's system prompt.
+
+create table if not exists public.project_hearings (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  purpose text not null,
+  court text,
+  case_number text,
+  hearing_date date not null,
+  notes text,
+  status text not null default 'scheduled'
+    check (status in ('scheduled', 'adjourned', 'done')),
+  source text not null default 'user'
+    check (source in ('assistant', 'user')),
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_hearings_project
+  on public.project_hearings(project_id, hearing_date);
+
+-- ---------------------------------------------------------------------------
+-- Matter parties
+-- ---------------------------------------------------------------------------
+--
+-- Conflict checking (PRD CLM-07/WA-09). Each matter records the entities
+-- connected to it; conflict checks match candidate names against the
+-- caller's accessible matters, parties, and clients.
+
+create table if not exists public.project_parties (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  name text not null,
+  role text not null default 'other'
+    check (role in ('client', 'counterparty', 'opposing_counsel', 'witness', 'other')),
+  notes text,
+  source text not null default 'user'
+    check (source in ('assistant', 'user')),
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_parties_project
+  on public.project_parties(project_id);
+
+-- ---------------------------------------------------------------------------
+-- Matter checklists
+-- ---------------------------------------------------------------------------
+--
+-- Per-matter task lists (PRD CM-07/FM-03/WA-04). Added by users in the
+-- Checklist tab, saved by the assistant via the save_task tool, or seeded
+-- from a matter template. Pending tasks are injected into every project
+-- chat's system prompt.
+
+create table if not exists public.project_tasks (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  title text not null,
+  notes text,
+  status text not null default 'pending'
+    check (status in ('pending', 'done')),
+  position integer not null default 0,
+  source text not null default 'user'
+    check (source in ('assistant', 'user', 'template')),
+  template_id text,
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_project_tasks_project
+  on public.project_tasks(project_id, position);
+
+-- ---------------------------------------------------------------------------
 -- Tabular reviews
 -- ---------------------------------------------------------------------------
 
@@ -379,6 +566,7 @@ create index if not exists tabular_review_chat_messages_chat_idx
 -- roles direct table privileges for backend-owned data.
 
 revoke all on public.user_profiles from anon, authenticated;
+revoke all on public.clients from anon, authenticated;
 revoke all on public.projects from anon, authenticated;
 revoke all on public.project_subfolders from anon, authenticated;
 revoke all on public.documents from anon, authenticated;
@@ -389,6 +577,11 @@ revoke all on public.hidden_workflows from anon, authenticated;
 revoke all on public.workflow_shares from anon, authenticated;
 revoke all on public.chats from anon, authenticated;
 revoke all on public.chat_messages from anon, authenticated;
+revoke all on public.project_memories from anon, authenticated;
+revoke all on public.project_deadlines from anon, authenticated;
+revoke all on public.project_hearings from anon, authenticated;
+revoke all on public.project_parties from anon, authenticated;
+revoke all on public.project_tasks from anon, authenticated;
 revoke all on public.tabular_reviews from anon, authenticated;
 revoke all on public.tabular_cells from anon, authenticated;
 revoke all on public.tabular_review_chats from anon, authenticated;
