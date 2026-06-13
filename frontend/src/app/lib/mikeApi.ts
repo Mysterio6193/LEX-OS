@@ -628,6 +628,7 @@ export async function deleteProjectHearing(
 // --- Billing: firm settings, time entries, GST invoices ---
 
 export async function getBillingSettings(): Promise<BillingSettings> {
+    if (isDemoMode) return mockApi.getBillingSettings();
     return apiRequest<BillingSettings>(`/billing/settings`);
 }
 
@@ -636,6 +637,7 @@ export async function updateBillingSettings(body: {
     firm_state?: string | null;
     default_hourly_rate?: number | null;
 }): Promise<BillingSettings> {
+    if (isDemoMode) return mockApi.updateBillingSettings(body);
     return apiRequest<BillingSettings>(`/billing/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -646,6 +648,7 @@ export async function updateBillingSettings(body: {
 export async function listTimeEntries(
     projectId: string,
 ): Promise<TimeEntry[]> {
+    if (isDemoMode) return mockApi.listTimeEntries(projectId);
     return apiRequest<TimeEntry[]>(
         `/projects/${projectId}/billing/time-entries`,
     );
@@ -660,6 +663,7 @@ export async function createTimeEntry(
         rate?: number;
     },
 ): Promise<TimeEntry> {
+    if (isDemoMode) return mockApi.createTimeEntry(projectId, body);
     return apiRequest<TimeEntry>(
         `/projects/${projectId}/billing/time-entries`,
         {
@@ -675,6 +679,7 @@ export async function updateTimeEntry(
     entryId: string,
     body: { description?: string; billed?: boolean },
 ): Promise<TimeEntry> {
+    if (isDemoMode) return mockApi.updateTimeEntry(projectId, entryId, body);
     return apiRequest<TimeEntry>(
         `/projects/${projectId}/billing/time-entries/${entryId}`,
         {
@@ -689,6 +694,7 @@ export async function deleteTimeEntry(
     projectId: string,
     entryId: string,
 ): Promise<void> {
+    if (isDemoMode) return mockApi.deleteTimeEntry(projectId, entryId);
     await apiRequest(
         `/projects/${projectId}/billing/time-entries/${entryId}`,
         { method: "DELETE" },
@@ -696,6 +702,7 @@ export async function deleteTimeEntry(
 }
 
 export async function listInvoices(projectId: string): Promise<Invoice[]> {
+    if (isDemoMode) return mockApi.listInvoices(projectId);
     return apiRequest<Invoice[]>(`/projects/${projectId}/billing/invoices`);
 }
 
@@ -711,6 +718,7 @@ export async function createInvoice(
         notes?: string;
     },
 ): Promise<Invoice> {
+    if (isDemoMode) return mockApi.createInvoice(projectId, body);
     return apiRequest<Invoice>(`/projects/${projectId}/billing/invoices`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -723,6 +731,8 @@ export async function updateInvoiceStatus(
     invoiceId: string,
     status: Invoice["status"],
 ): Promise<Invoice> {
+    if (isDemoMode)
+        return mockApi.updateInvoiceStatus(projectId, invoiceId, status);
     return apiRequest<Invoice>(
         `/projects/${projectId}/billing/invoices/${invoiceId}`,
         {
@@ -1847,6 +1857,51 @@ const DEFAULT_PROJECT_HEARINGS: ProjectHearing[] = [
         updated_at: new Date().toISOString(),
     }
 ];
+
+const DEFAULT_BILLING_SETTINGS: BillingSettings = {
+    firm_gstin: "07ABCDE1234F1Z5",
+    firm_state: "Delhi",
+    default_hourly_rate: 5000,
+};
+
+const DEFAULT_TIME_ENTRIES: TimeEntry[] = [
+    {
+        id: "te-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        entry_date: new Date(Date.now() - 2 * 24 * 3600 * 1000)
+            .toISOString()
+            .slice(0, 10),
+        description: "Reviewed petition record and prepared written submissions",
+        minutes: 150,
+        rate: 5000,
+        amount: 12500,
+        billed: false,
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "te-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        entry_date: new Date(Date.now() - 1 * 24 * 3600 * 1000)
+            .toISOString()
+            .slice(0, 10),
+        description: "Client conference and strategy note",
+        minutes: 60,
+        rate: 5000,
+        amount: 5000,
+        billed: false,
+        source: "assistant",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+];
+
+const DEFAULT_INVOICES: Invoice[] = [];
 
 const DEFAULT_PROJECT_PARTIES: ProjectParty[] = [
     {
@@ -4056,5 +4111,232 @@ const mockApi = {
             added: addedTasks.length,
             tasks: addedTasks,
         };
+    },
+
+    // --- Billing (India GST) ---
+
+    getBillingSettings: async (): Promise<BillingSettings> => {
+        await delay(50);
+        return getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+    },
+
+    updateBillingSettings: async (body: {
+        firm_gstin?: string | null;
+        firm_state?: string | null;
+        default_hourly_rate?: number | null;
+    }): Promise<BillingSettings> => {
+        await delay(100);
+        const current = getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+        const updated: BillingSettings = { ...current, ...body };
+        setLocalStorage("lexos_billing_settings", updated);
+        return updated;
+    },
+
+    listTimeEntries: async (projectId: string): Promise<TimeEntry[]> => {
+        await delay(50);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        return entries.filter((e) => e.project_id === projectId);
+    },
+
+    createTimeEntry: async (
+        projectId: string,
+        body: {
+            description: string;
+            minutes: number;
+            entry_date?: string;
+            rate?: number;
+        },
+    ): Promise<TimeEntry> => {
+        await delay(100);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        const settings = getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+        const rate = body.rate ?? settings.default_hourly_rate ?? 0;
+        const amount =
+            Math.round(((body.minutes / 60) * rate + Number.EPSILON) * 100) /
+            100;
+        const newEntry: TimeEntry = {
+            id: `te-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            entry_date:
+                body.entry_date || new Date().toISOString().slice(0, 10),
+            description: body.description,
+            minutes: body.minutes,
+            rate,
+            amount,
+            billed: false,
+            source: "user",
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        entries.push(newEntry);
+        setLocalStorage("lexos_time_entries", entries);
+        return newEntry;
+    },
+
+    updateTimeEntry: async (
+        projectId: string,
+        entryId: string,
+        body: { description?: string; billed?: boolean },
+    ): Promise<TimeEntry> => {
+        await delay(100);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        const idx = entries.findIndex((e) => e.id === entryId);
+        if (idx === -1) throw new Error("Time entry not found");
+        entries[idx] = {
+            ...entries[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        setLocalStorage("lexos_time_entries", entries);
+        return entries[idx];
+    },
+
+    deleteTimeEntry: async (
+        projectId: string,
+        entryId: string,
+    ): Promise<void> => {
+        await delay(100);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        setLocalStorage(
+            "lexos_time_entries",
+            entries.filter((e) => e.id !== entryId),
+        );
+    },
+
+    listInvoices: async (projectId: string): Promise<Invoice[]> => {
+        await delay(50);
+        const invoices = getLocalStorage<Invoice[]>(
+            "lexos_invoices",
+            DEFAULT_INVOICES,
+        );
+        return invoices.filter((i) => i.project_id === projectId);
+    },
+
+    createInvoice: async (
+        projectId: string,
+        body: {
+            invoice_date?: string;
+            client_name?: string;
+            client_gstin?: string;
+            place_of_supply?: string;
+            time_entry_ids?: string[];
+            line_items?: InvoiceLineItem[];
+            notes?: string;
+        },
+    ): Promise<Invoice> => {
+        await delay(150);
+        const round2 = (n: number) =>
+            Math.round((n + Number.EPSILON) * 100) / 100;
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        const settings = getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+        const lineItems: InvoiceLineItem[] = [...(body.line_items ?? [])];
+        const ids = body.time_entry_ids ?? [];
+        for (const e of entries.filter((e) => ids.includes(e.id))) {
+            const hrs = e.minutes > 0 ? `${(e.minutes / 60).toFixed(2)} hrs` : "";
+            lineItems.push({
+                description: [e.entry_date, e.description, hrs]
+                    .filter(Boolean)
+                    .join(" — "),
+                amount: round2(e.amount),
+            });
+        }
+        const subtotal = round2(
+            lineItems.reduce((s, li) => s + (Number(li.amount) || 0), 0),
+        );
+        const place = body.place_of_supply?.trim() || null;
+        const intra =
+            !!place &&
+            !!settings.firm_state &&
+            place.toLowerCase() === settings.firm_state.toLowerCase();
+        const cgst = intra ? round2(subtotal * 0.09) : 0;
+        const sgst = intra ? round2(subtotal * 0.09) : 0;
+        const igst = intra ? 0 : round2(subtotal * 0.18);
+        const total = round2(subtotal + cgst + sgst + igst);
+        const invoices = getLocalStorage<Invoice[]>(
+            "lexos_invoices",
+            DEFAULT_INVOICES,
+        );
+        const newInvoice: Invoice = {
+            id: `inv-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            invoice_number: `INV-${String(invoices.length + 1).padStart(4, "0")}`,
+            invoice_date:
+                body.invoice_date || new Date().toISOString().slice(0, 10),
+            client_name: body.client_name?.trim() || null,
+            client_gstin: body.client_gstin?.trim() || null,
+            place_of_supply: place,
+            sac_code: "9982",
+            line_items: lineItems,
+            subtotal,
+            cgst,
+            sgst,
+            igst,
+            total,
+            status: "draft",
+            notes: body.notes?.trim() || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        invoices.push(newInvoice);
+        setLocalStorage("lexos_invoices", invoices);
+        // Mark consumed entries billed.
+        if (ids.length) {
+            const all = entries.map((e) =>
+                ids.includes(e.id) ? { ...e, billed: true } : e,
+            );
+            setLocalStorage("lexos_time_entries", all);
+        }
+        return newInvoice;
+    },
+
+    updateInvoiceStatus: async (
+        projectId: string,
+        invoiceId: string,
+        status: Invoice["status"],
+    ): Promise<Invoice> => {
+        await delay(100);
+        const invoices = getLocalStorage<Invoice[]>(
+            "lexos_invoices",
+            DEFAULT_INVOICES,
+        );
+        const idx = invoices.findIndex((i) => i.id === invoiceId);
+        if (idx === -1) throw new Error("Invoice not found");
+        invoices[idx] = {
+            ...invoices[idx],
+            status,
+            updated_at: new Date().toISOString(),
+        };
+        setLocalStorage("lexos_invoices", invoices);
+        return invoices[idx];
     }
 };
