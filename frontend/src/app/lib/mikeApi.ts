@@ -10,6 +10,7 @@ import type {
     ChatDetailOut,
     CitationAnnotation,
     Client,
+    ConflictMatch,
     Document,
     Folder,
     Message,
@@ -21,6 +22,7 @@ import type {
     MatterTemplate,
     ProjectParty,
     ProjectTask,
+    TimelineEvent,
     TimelineResponse,
     Workflow,
     TabularReview,
@@ -47,7 +49,19 @@ interface ServerChatDetailOut {
 const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 const isDev = process.env.NODE_ENV !== "production";
-const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+const getSupabaseUrl = () => {
+    try {
+        return process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
+    } catch {
+        return "https://placeholder-project.supabase.co";
+    }
+};
+
+const isDemoMode =
+    process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
+    getSupabaseUrl().includes("placeholder") ||
+    getSupabaseUrl().includes("your-project") ||
+    !process.env.NEXT_PUBLIC_SUPABASE_URL;
 const devLog = (...args: Parameters<typeof console.log>) => {
     if (isDev) console.log(...args);
 };
@@ -183,6 +197,7 @@ export async function cloneProject(
     projectId: string,
     name?: string,
 ): Promise<Project> {
+    if (isDemoMode) return mockApi.cloneProject(projectId, name);
     return apiRequest<Project>(`/projects/${projectId}/clone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -366,6 +381,7 @@ export async function setDocumentPrecedent(
     documentId: string,
     isPrecedent: boolean,
 ): Promise<{ id: string; is_precedent: boolean }> {
+    if (isDemoMode) return mockApi.setDocumentPrecedent(projectId, documentId, isPrecedent);
     return apiRequest<{ id: string; is_precedent: boolean }>(
         `/projects/${projectId}/documents/${documentId}/precedent`,
         {
@@ -379,6 +395,7 @@ export async function setDocumentPrecedent(
 // Clients
 
 export async function listClients(): Promise<Client[]> {
+    if (isDemoMode) return mockApi.listClients();
     return apiRequest<Client[]>("/clients");
 }
 
@@ -386,6 +403,7 @@ export async function createClient(body: {
     name: string;
     notes?: string;
 }): Promise<Client> {
+    if (isDemoMode) return mockApi.createClient(body);
     return apiRequest<Client>("/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -397,6 +415,7 @@ export async function updateClient(
     clientId: string,
     body: { name?: string; notes?: string | null },
 ): Promise<Client> {
+    if (isDemoMode) return mockApi.updateClient(clientId, body);
     return apiRequest<Client>(`/clients/${clientId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -405,6 +424,7 @@ export async function updateClient(
 }
 
 export async function deleteClient(clientId: string): Promise<void> {
+    if (isDemoMode) return mockApi.deleteClient(clientId);
     await apiRequest(`/clients/${clientId}`, { method: "DELETE" });
 }
 
@@ -451,6 +471,7 @@ export async function createProjectFolder(
 export async function listProjectMemories(
     projectId: string,
 ): Promise<ProjectMemory[]> {
+    if (isDemoMode) return mockApi.listProjectMemories(projectId);
     return apiRequest<ProjectMemory[]>(`/projects/${projectId}/memory`);
 }
 
@@ -458,6 +479,7 @@ export async function createProjectMemory(
     projectId: string,
     body: { kind: ProjectMemory["kind"]; content: string },
 ): Promise<ProjectMemory> {
+    if (isDemoMode) return mockApi.createProjectMemory(projectId, body);
     return apiRequest<ProjectMemory>(`/projects/${projectId}/memory`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -470,6 +492,7 @@ export async function updateProjectMemory(
     memoryId: string,
     body: { kind?: ProjectMemory["kind"]; content?: string },
 ): Promise<ProjectMemory> {
+    if (isDemoMode) return mockApi.updateProjectMemory(projectId, memoryId, body);
     return apiRequest<ProjectMemory>(
         `/projects/${projectId}/memory/${memoryId}`,
         {
@@ -484,6 +507,7 @@ export async function deleteProjectMemory(
     projectId: string,
     memoryId: string,
 ): Promise<void> {
+    if (isDemoMode) return mockApi.deleteProjectMemory(projectId, memoryId);
     await apiRequest(`/projects/${projectId}/memory/${memoryId}`, {
         method: "DELETE",
     });
@@ -492,6 +516,7 @@ export async function deleteProjectMemory(
 export async function listProjectDeadlines(
     projectId: string,
 ): Promise<ProjectDeadline[]> {
+    if (isDemoMode) return mockApi.listProjectDeadlines(projectId);
     return apiRequest<ProjectDeadline[]>(`/projects/${projectId}/deadlines`);
 }
 
@@ -499,6 +524,7 @@ export async function createProjectDeadline(
     projectId: string,
     body: { title: string; due_date: string; notes?: string },
 ): Promise<ProjectDeadline> {
+    if (isDemoMode) return mockApi.createProjectDeadline(projectId, body);
     return apiRequest<ProjectDeadline>(`/projects/${projectId}/deadlines`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -516,6 +542,7 @@ export async function updateProjectDeadline(
         status?: ProjectDeadline["status"];
     },
 ): Promise<ProjectDeadline> {
+    if (isDemoMode) return mockApi.updateProjectDeadline(projectId, deadlineId, body);
     return apiRequest<ProjectDeadline>(
         `/projects/${projectId}/deadlines/${deadlineId}`,
         {
@@ -530,6 +557,7 @@ export async function deleteProjectDeadline(
     projectId: string,
     deadlineId: string,
 ): Promise<void> {
+    if (isDemoMode) return mockApi.deleteProjectDeadline(projectId, deadlineId);
     await apiRequest(`/projects/${projectId}/deadlines/${deadlineId}`, {
         method: "DELETE",
     });
@@ -538,6 +566,7 @@ export async function deleteProjectDeadline(
 export async function listProjectHearings(
     projectId: string,
 ): Promise<ProjectHearing[]> {
+    if (isDemoMode) return mockApi.listProjectHearings(projectId);
     return apiRequest<ProjectHearing[]>(`/projects/${projectId}/hearings`);
 }
 
@@ -551,6 +580,7 @@ export async function createProjectHearing(
         notes?: string;
     },
 ): Promise<ProjectHearing> {
+    if (isDemoMode) return mockApi.createProjectHearing(projectId, body);
     return apiRequest<ProjectHearing>(`/projects/${projectId}/hearings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -570,6 +600,7 @@ export async function updateProjectHearing(
         status?: ProjectHearing["status"];
     },
 ): Promise<ProjectHearing> {
+    if (isDemoMode) return mockApi.updateProjectHearing(projectId, hearingId, body);
     return apiRequest<ProjectHearing>(
         `/projects/${projectId}/hearings/${hearingId}`,
         {
@@ -584,6 +615,7 @@ export async function deleteProjectHearing(
     projectId: string,
     hearingId: string,
 ): Promise<void> {
+    if (isDemoMode) return mockApi.deleteProjectHearing(projectId, hearingId);
     await apiRequest(`/projects/${projectId}/hearings/${hearingId}`, {
         method: "DELETE",
     });
@@ -592,6 +624,7 @@ export async function deleteProjectHearing(
 export async function listProjectParties(
     projectId: string,
 ): Promise<ProjectParty[]> {
+    if (isDemoMode) return mockApi.listProjectParties(projectId);
     return apiRequest<ProjectParty[]>(`/projects/${projectId}/parties`);
 }
 
@@ -599,6 +632,7 @@ export async function createProjectParty(
     projectId: string,
     body: { name: string; role: ProjectParty["role"]; notes?: string },
 ): Promise<ProjectParty> {
+    if (isDemoMode) return mockApi.createProjectParty(projectId, body);
     return apiRequest<ProjectParty>(`/projects/${projectId}/parties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -615,6 +649,7 @@ export async function updateProjectParty(
         notes?: string | null;
     },
 ): Promise<ProjectParty> {
+    if (isDemoMode) return mockApi.updateProjectParty(projectId, partyId, body);
     return apiRequest<ProjectParty>(
         `/projects/${projectId}/parties/${partyId}`,
         {
@@ -629,6 +664,7 @@ export async function deleteProjectParty(
     projectId: string,
     partyId: string,
 ): Promise<void> {
+    if (isDemoMode) return mockApi.deleteProjectParty(projectId, partyId);
     await apiRequest(`/projects/${projectId}/parties/${partyId}`, {
         method: "DELETE",
     });
@@ -638,6 +674,7 @@ export async function runConflictCheck(body: {
     names?: string[];
     project_id?: string;
 }): Promise<ConflictCheckResponse> {
+    if (isDemoMode) return mockApi.runConflictCheck(body);
     return apiRequest<ConflictCheckResponse>(`/conflicts/check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -649,6 +686,7 @@ export async function getProjectTimeline(
     projectId: string,
     opts?: { before?: string; limit?: number },
 ): Promise<TimelineResponse> {
+    if (isDemoMode) return mockApi.getProjectTimeline(projectId, opts);
     const params = new URLSearchParams();
     if (opts?.before) params.set("before", opts.before);
     if (opts?.limit) params.set("limit", String(opts.limit));
@@ -661,6 +699,7 @@ export async function getProjectTimeline(
 export async function listProjectTasks(
     projectId: string,
 ): Promise<ProjectTask[]> {
+    if (isDemoMode) return mockApi.listProjectTasks(projectId);
     return apiRequest<ProjectTask[]>(`/projects/${projectId}/tasks`);
 }
 
@@ -668,6 +707,7 @@ export async function createProjectTask(
     projectId: string,
     body: { title: string; notes?: string },
 ): Promise<ProjectTask> {
+    if (isDemoMode) return mockApi.createProjectTask(projectId, body);
     return apiRequest<ProjectTask>(`/projects/${projectId}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -685,6 +725,7 @@ export async function updateProjectTask(
         position?: number;
     },
 ): Promise<ProjectTask> {
+    if (isDemoMode) return mockApi.updateProjectTask(projectId, taskId, body);
     return apiRequest<ProjectTask>(
         `/projects/${projectId}/tasks/${taskId}`,
         {
@@ -699,12 +740,14 @@ export async function deleteProjectTask(
     projectId: string,
     taskId: string,
 ): Promise<void> {
+    if (isDemoMode) return mockApi.deleteProjectTask(projectId, taskId);
     await apiRequest(`/projects/${projectId}/tasks/${taskId}`, {
         method: "DELETE",
     });
 }
 
 export async function listMatterTemplates(): Promise<MatterTemplate[]> {
+    if (isDemoMode) return mockApi.listMatterTemplates();
     return apiRequest<MatterTemplate[]>(`/matter-templates`);
 }
 
@@ -712,6 +755,7 @@ export async function applyMatterTemplate(
     projectId: string,
     templateId: string,
 ): Promise<{ added: number; tasks: ProjectTask[] }> {
+    if (isDemoMode) return mockApi.applyMatterTemplate(projectId, templateId);
     return apiRequest<{ added: number; tasks: ProjectTask[] }>(
         `/projects/${projectId}/tasks/apply-template`,
         {
@@ -1578,14 +1622,39 @@ const DEFAULT_USER_PROFILE: UserProfile = {
     }
 };
 
+const DEFAULT_CLIENTS: Client[] = [
+    {
+        id: "cli-1",
+        user_id: "demo-user-id",
+        name: "Acme Corporation Private Limited",
+        notes: "Major manufacturing conglomerate based in Mumbai.",
+        created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "cli-2",
+        user_id: "demo-user-id",
+        name: "Acme Power Projects",
+        notes: "Infrastructure developer.",
+        created_at: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
 const DEFAULT_PROJECTS: Project[] = [
     {
         id: "proj-1",
         user_id: "demo-user-id",
         name: "Kesavananda Bharati Analysis",
         cm_number: "CM-2026-001",
+        client_id: "cli-1",
         shared_with: ["partner@lexos.org"],
-        created_at: new Date().toISOString(),
+        matter_type: "Writ Petition (Art. 226/32)",
+        court: "Supreme Court of India",
+        case_number: "Writ Petition (Civil) No. 135 of 1970",
+        jurisdiction: "Constitutional Bench",
+        filing_date: "1970-10-31",
+        created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
         updated_at: new Date().toISOString(),
     },
     {
@@ -1593,9 +1662,404 @@ const DEFAULT_PROJECTS: Project[] = [
         user_id: "demo-user-id",
         name: "General Corporate Advisory",
         cm_number: "CM-2026-002",
+        client_id: "cli-2",
         shared_with: [],
-        created_at: new Date().toISOString(),
+        matter_type: "General Matter",
+        court: "NCLT Mumbai Bench",
+        case_number: "CP/2026/009",
+        jurisdiction: "Company Law",
+        filing_date: "2026-01-15",
+        created_at: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(),
         updated_at: new Date().toISOString(),
+    }
+];
+
+const DEFAULT_PROJECT_DEADLINES: ProjectDeadline[] = [
+    {
+        id: "dl-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        title: "File Written Submissions in Writ Petition",
+        due_date: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        notes: "Need to compile annexures and file before the constitutional bench.",
+        status: "pending",
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "dl-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        title: "Serve copy to Respondent Caveators",
+        due_date: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        notes: "Caveat notice already received on behalf of State of Kerala.",
+        status: "pending",
+        source: "assistant",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
+const DEFAULT_PROJECT_HEARINGS: ProjectHearing[] = [
+    {
+        id: "hr-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        purpose: "Final Arguments Admission",
+        court: "Supreme Court of India - Court 1",
+        case_number: "Writ Petition (Civil) No. 135 of 1970",
+        hearing_date: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        notes: "Constitutional Bench of 13 judges to assemble.",
+        status: "scheduled",
+        source: "assistant",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "hr-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        purpose: "Interim Relief Arguments",
+        court: "High Court of Kerala",
+        case_number: "WP(C) No. 441 of 1970",
+        hearing_date: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+        notes: "Interim stay granted on land acquisition proceedings.",
+        status: "done",
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
+const DEFAULT_PROJECT_PARTIES: ProjectParty[] = [
+    {
+        id: "pty-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        name: "His Holiness Kesavananda Bharati Sripadagalvaru",
+        role: "client",
+        notes: "Head of the Edneer Mutt, petitioner.",
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "pty-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        name: "State of Kerala",
+        role: "counterparty",
+        notes: "Respondent state contesting mutation/land rights.",
+        source: "assistant",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "pty-3",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        name: "Nani Palkhivala",
+        role: "opposing_counsel",
+        notes: "Lead counsel for petitioner.",
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
+const DEFAULT_PROJECT_MEMORIES: ProjectMemory[] = [
+    {
+        id: "mem-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        kind: "decision",
+        content: "Decided to challenge Article 31B and 29th Constitutional Amendment directly in the petition.",
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 28 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "mem-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        kind: "fact",
+        content: "Edneer Mutt owns approximately 400 acres of land affected by the Kerala Land Reforms Act.",
+        source: "assistant",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 22 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
+const DEFAULT_PROJECT_TASKS: ProjectTask[] = [
+    {
+        id: "tsk-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        title: "Identify the fundamental/legal right infringed and the cause of action",
+        notes: "Property right violation under Art 19(1)(f) and freedom to manage religious affairs under Art 26.",
+        status: "done",
+        position: 0,
+        source: "template",
+        template_id: "tpl-writ-petition",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 29 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "tsk-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        title: "Confirm territorial jurisdiction and the correct High Court bench / Supreme Court",
+        notes: "Filed directly in Supreme Court of India under Art 32.",
+        status: "done",
+        position: 1,
+        source: "template",
+        template_id: "tpl-writ-petition",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 28 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "tsk-3",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        title: "Draft the writ petition with grounds and prayer",
+        notes: "Need to draft ground of basic structure limitation.",
+        status: "pending",
+        position: 2,
+        source: "template",
+        template_id: "tpl-writ-petition",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 27 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    }
+];
+
+const DEFAULT_MATTER_TEMPLATES: MatterTemplate[] = [
+    {
+        id: "tpl-ma-diligence",
+        name: "M&A Due Diligence",
+        description: "Standard buy-side due diligence workflow for an acquisition.",
+        task_count: 13,
+        tasks: [
+            "Run conflict check on target, sellers, and key counterparties",
+            "Prepare and send due diligence request list",
+            "Set up data room access and document index",
+            "Review corporate records and capitalization",
+            "Review material contracts and change-of-control clauses",
+            "Review financing arrangements and security interests",
+            "Review employment and benefit arrangements",
+            "Review IP ownership and licenses",
+            "Review litigation, disputes, and regulatory matters",
+            "Prepare red-flag due diligence report",
+            "Draft disclosure schedule comments",
+            "Track conditions precedent through closing",
+        ]
+    },
+    {
+        id: "tpl-nda-review",
+        name: "NDA Review",
+        description: "Fast-turnaround review of a non-disclosure agreement.",
+        task_count: 8,
+        tasks: [
+            "Run conflict check on counterparty",
+            "Confirm mutual vs. one-way structure matches the deal",
+            "Review definition and scope of confidential information",
+            "Check term, survival, and return/destruction obligations",
+            "Check permitted disclosures and residuals language",
+            "Review remedies, governing law, and jurisdiction",
+            "Prepare markup and summary of key changes",
+            "Circulate for signature and calendar expiry",
+        ]
+    },
+    {
+        id: "tpl-litigation",
+        name: "Litigation",
+        description: "Core workflow for a new contentious matter engagement.",
+        task_count: 9,
+        tasks: [
+            "Run conflict check on all parties and related entities",
+            "Issue litigation hold and preserve documents",
+            "Collect key documents and build chronology",
+            "Assess limitation periods and calendar critical deadlines",
+            "Evaluate claims, defences, and preliminary strategy",
+            "Prepare initial pleading or response",
+            "Plan discovery / disclosure approach",
+            "Consider settlement and ADR options",
+            "Prepare witness list and evidence plan",
+        ]
+    },
+    {
+        id: "tpl-lease-analysis",
+        name: "Lease Analysis",
+        description: "Commercial lease review and negotiation checklist.",
+        task_count: 8,
+        tasks: [
+            "Run conflict check on landlord and guarantors",
+            "Confirm premises, term, and renewal options",
+            "Review rent, escalations, and operating expense pass-throughs",
+            "Review assignment, subletting, and change-of-control provisions",
+            "Check repair, maintenance, and reinstatement obligations",
+            "Review insurance and indemnity allocation",
+            "Check default, termination, and remedies provisions",
+            "Summarize key terms and negotiation points for client",
+        ]
+    },
+    {
+        id: "tpl-general",
+        name: "General Matter",
+        description: "A minimal checklist for any new engagement.",
+        task_count: 5,
+        tasks: [
+            "Run conflict check on client and counterparties",
+            "Confirm engagement scope and fee arrangement",
+            "Collect and organize matter documents",
+            "Record key parties and deadlines",
+            "Agree next steps with client",
+        ]
+    },
+    {
+        id: "tpl-writ-petition",
+        name: "Writ Petition (Art. 226/32)",
+        description: "Constitutional writ before a High Court (Art. 226) or the Supreme Court (Art. 32).",
+        task_count: 10,
+        tasks: [
+            "Run conflict check on petitioner and respondents",
+            "Identify the fundamental/legal right infringed and the cause of action",
+            "Confirm territorial jurisdiction and the correct High Court bench / Supreme Court",
+            "Check availability and exhaustion of alternative remedies",
+            "Draft the writ petition with grounds and prayer",
+            "Prepare the synopsis and list of dates",
+            "Annex impugned order and supporting documents (paper book)",
+            "Prepare affidavit in support and vakalatnama",
+            "Pay court fees and e-file / file before the registry",
+            "Calendar the listing date and prepare for admission hearing",
+        ]
+    },
+    {
+        id: "tpl-bail-application",
+        name: "Bail Application (BNSS/CrPC)",
+        description: "Regular or anticipatory bail application in a criminal matter.",
+        task_count: 8,
+        tasks: [
+            "Run conflict check on the accused and complainant",
+            "Confirm FIR number, sections charged, and custody status",
+            "Determine bail type (regular u/s 480 BNSS / anticipatory u/s 482 BNSS) and forum",
+            "Review case diary, remand papers, and grounds for arrest",
+            "Draft the bail application with grounds and case law",
+            "Prepare affidavit, vakalatnama, and antecedents details",
+            "File the application and obtain the listing date",
+            "Prepare submissions and proposed bail conditions / sureties",
+        ]
+    },
+    {
+        id: "tpl-nclt-ibc",
+        name: "Insolvency – NCLT/IBC",
+        description: "Corporate insolvency resolution application before the NCLT under the IBC, 2016.",
+        task_count: 9,
+        tasks: [
+            "Run conflict check on the applicant and corporate debtor",
+            "Confirm the debt, default, and that it crosses the threshold (₹1 crore)",
+            "Determine the applicant type (S.7 financial / S.9 operational creditor)",
+            "For S.9 — issue and serve the demand notice in Form 3/4 and await 10-day response",
+            "Compile records of default (information utility / bank statements / invoices)",
+            "Draft the application in the prescribed Form (Form 1 / Form 5)",
+            "Propose an Interim Resolution Professional (with written consent in Form 2)",
+            "Pay the prescribed fee and file before the appropriate NCLT bench",
+            "Calendar the listing and track admission/defect cure",
+        ]
+    },
+    {
+        id: "tpl-cheque-138",
+        name: "Cheque Dishonour – S.138 NI Act",
+        description: "Complaint for dishonour of cheque under Section 138 of the Negotiable Instruments Act.",
+        task_count: 9,
+        tasks: [
+            "Run conflict check on the complainant and accused/drawer",
+            "Confirm the cheque, return memo, and reason for dishonour",
+            "Send the statutory demand notice within 30 days of the return memo",
+            "Await the 15-day payment period after the notice is served",
+            "File the complaint within 30 days of the notice-period expiry (limitation)",
+            "Confirm territorial jurisdiction (payee's bank branch location)",
+            "Draft the complaint, list of witnesses, and documents",
+            "Prepare the complainant's affidavit (S.145 evidence) and vakalatnama",
+            "File before the Magistrate and obtain the next date",
+        ]
+    },
+    {
+        id: "tpl-arbitration",
+        name: "Arbitration (A&C Act 1996)",
+        description: "Arbitration proceeding under the Arbitration and Conciliation Act, 1996.",
+        task_count: 9,
+        tasks: [
+            "Run conflict check on the claimant and respondent",
+            "Confirm the arbitration agreement / clause and seat & venue",
+            "Issue the notice invoking arbitration (S.21)",
+            "Agree on or apply for appointment of arbitrator(s) (S.11)",
+            "Assess limitation and any interim-relief need (S.9 / S.17)",
+            "Draft and file the statement of claim with documents",
+            "Track the statement of defence and counterclaim",
+            "Plan evidence, witness statements, and hearings",
+            "Track timelines for the award (S.29A)",
+        ]
+    },
+    {
+        id: "tpl-consumer-complaint",
+        name: "Consumer Complaint (CP Act 2019)",
+        description: "Complaint before a Consumer Commission under the Consumer Protection Act, 2019.",
+        task_count: 8,
+        tasks: [
+            "Run conflict check on the complainant and opposite party",
+            "Confirm 'consumer' status and the deficiency in service / defect in goods",
+            "Determine pecuniary & territorial jurisdiction (District/State/National Commission)",
+            "Check limitation (within 2 years of cause of action)",
+            "Compile invoices, correspondence, and evidence of deficiency",
+            "Draft the complaint with reliefs and affidavit",
+            "Pay the prescribed fee and file before the Commission",
+            "Calendar admission and prepare for the first hearing",
+        ]
+    },
+    {
+        id: "tpl-civil-suit",
+        name: "Civil Suit (CPC)",
+        description: "Civil suit for recovery / declaration / injunction under the CPC.",
+        task_count: 9,
+        tasks: [
+            "Run conflict check on the plaintiff and defendants",
+            "Identify the cause of action, reliefs, and valuation for court fees",
+            "Confirm jurisdiction (pecuniary, territorial, subject-matter)",
+            "Check limitation under the Limitation Act, 1963",
+            "Send a S.80 CPC notice where a government/public officer is a defendant",
+            "Draft the plaint with cause title, pleadings, and prayer",
+            "Prepare the list of documents, verification, and vakalatnama",
+            "Pay ad valorem court fees and file before the appropriate court",
+            "Track issuance of summons and the next date",
+        ]
+    },
+    {
+        id: "tpl-hearing-prep",
+        name: "Court Hearing Prep & Trial Briefing",
+        description: "Standard checklist for preparing for an upcoming crucial court hearing or trial argument.",
+        task_count: 7,
+        tasks: [
+            "Review cause list and confirm case slot/timing",
+            "Prepare compilation of precedents and statutory authorities",
+            "Conduct Indian Kanoon search on opposing counsel's citations",
+            "Draft brief note of arguments / synopsis of facts",
+            "Prepare list of dates and index of pleadings",
+            "Brief Senior Counsel on case strategy and arguments",
+            "Verify service of index and synopsis to Opposing Counsel"
+        ]
     }
 ];
 
@@ -1695,6 +2159,35 @@ const DEFAULT_WORKFLOWS: Workflow[] = [
         is_system: true,
         created_at: new Date().toISOString(),
         practice: "Corporate",
+        is_owner: false,
+    },
+    {
+        id: "wf-3",
+        user_id: null,
+        title: "Corporate Compliance Auditor",
+        type: "assistant",
+        prompt_md: "Act as a corporate compliance auditor. Scan the company records to identify any filing defaults (e.g. AOC-4, MGT-7), pending director board resolution approvals, or charges registered with the MCA.",
+        columns_config: null,
+        is_system: true,
+        created_at: new Date().toISOString(),
+        practice: "Corporate Law",
+        is_owner: false,
+    },
+    {
+        id: "wf-4",
+        user_id: null,
+        title: "S.138 NI Act Checklist Auditor",
+        type: "tabular",
+        prompt_md: null,
+        columns_config: [
+            { index: 0, name: "Statutory Notice Served Date", prompt: "Identify the date when the statutory demand notice was successfully served on the drawer.", format: "date" },
+            { index: 1, name: "Notice Period Expiry", prompt: "Calculate the exact expiry date of the 15-day notice response window.", format: "date" },
+            { index: 2, name: "Is Complaint within Limitation?", prompt: "Is the complaint filed within the 30-day limitation window starting from the notice period expiry?", format: "yes_no" },
+            { index: 3, name: "Pecuniary Threshold Crosses?", prompt: "Is the cheque amount above 10,000 INR?", format: "yes_no" }
+        ],
+        is_system: true,
+        created_at: new Date().toISOString(),
+        practice: "Criminal Law",
         is_owner: false,
     }
 ];
@@ -2101,14 +2594,24 @@ const mockApi = {
 
     streamTabularChat: streamTabularChatMock,
 
-    listProjects: async (): Promise<Project[]> => {
+    listProjects: async (includeArchived = false): Promise<Project[]> => {
         await delay(100);
-        return getLocalStorage("lexos_projects", DEFAULT_PROJECTS);
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
+        const clients = getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
+        const resolved = projects.map((p) => {
+            const client = clients.find((c) => c.id === p.client_id);
+            return {
+                ...p,
+                client: client ? { id: client.id, name: client.name } : null,
+            };
+        });
+        if (includeArchived) return resolved;
+        return resolved.filter((p) => !p.archived_at);
     },
     
     createProject: async (name: string, cm_number?: string, shared_with?: string[]): Promise<Project> => {
         await delay(100);
-        const projects = getLocalStorage("lexos_projects", DEFAULT_PROJECTS);
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
         const newProj: Project = {
             id: `proj-${Date.now()}`,
             user_id: "demo-user-id",
@@ -2125,26 +2628,29 @@ const mockApi = {
 
     getProject: async (projectId: string): Promise<Project> => {
         await delay(100);
-        const projects = getLocalStorage("lexos_projects", DEFAULT_PROJECTS);
-        const folders = getLocalStorage("lexos_folders", DEFAULT_FOLDERS);
-        const documents = getLocalStorage("lexos_documents", DEFAULT_DOCUMENTS);
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
+        const folders = getLocalStorage<Folder[]>("lexos_folders", DEFAULT_FOLDERS);
+        const documents = getLocalStorage<Document[]>("lexos_documents", DEFAULT_DOCUMENTS);
+        const clients = getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
 
         const project = projects.find((p) => p.id === projectId);
         if (!project) throw new Error("Project not found");
 
         const projFolders = folders.filter((f) => f.project_id === projectId);
         const projDocs = documents.filter((d) => d.project_id === projectId);
+        const client = clients.find((c) => c.id === project.client_id);
 
         return {
             ...project,
+            client: client ? { id: client.id, name: client.name } : null,
             folders: projFolders,
             documents: projDocs,
         };
     },
 
-    updateProject: async (projectId: string, payload: { name?: string; cm_number?: string; shared_with?: string[] }): Promise<Project> => {
+    updateProject: async (projectId: string, payload: any): Promise<Project> => {
         await delay(100);
-        const projects = getLocalStorage("lexos_projects", DEFAULT_PROJECTS);
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
         const idx = projects.findIndex((p) => p.id === projectId);
         if (idx === -1) throw new Error("Project not found");
 
@@ -2895,5 +3401,548 @@ const mockApi = {
         const messages = getLocalStorage<Record<string, RawTRMessage[]>>(`lexos_tr_messages_${reviewId}`, {});
         delete messages[chatId];
         setLocalStorage(`lexos_tr_messages_${reviewId}`, messages);
+    },
+
+    cloneProject: async (projectId: string, name?: string): Promise<Project> => {
+        await delay(300);
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
+        const sourceProj = projects.find((p) => p.id === projectId);
+        if (!sourceProj) throw new Error("Source project not found");
+        
+        const newProjId = `proj-${Date.now()}`;
+        const newProj: Project = {
+            ...sourceProj,
+            id: newProjId,
+            name: name || `${sourceProj.name} (Copy)`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        projects.push(newProj);
+        setLocalStorage("lexos_projects", projects);
+        
+        const folders = getLocalStorage<Folder[]>("lexos_folders", DEFAULT_FOLDERS);
+        const sourceFolders = folders.filter((f) => f.project_id === projectId);
+        const folderIdMap = new Map<string, string>();
+        
+        sourceFolders.forEach((f) => {
+            const newFolderId = `fold-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            folderIdMap.set(f.id, newFolderId);
+            folders.push({
+                ...f,
+                id: newFolderId,
+                project_id: newProjId,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            });
+        });
+        
+        folders.forEach((f) => {
+            if (f.project_id === newProjId && f.parent_folder_id && folderIdMap.has(f.parent_folder_id)) {
+                f.parent_folder_id = folderIdMap.get(f.parent_folder_id)!;
+            }
+        });
+        setLocalStorage("lexos_folders", folders);
+        
+        const documents = getLocalStorage<Document[]>("lexos_documents", DEFAULT_DOCUMENTS);
+        const sourceDocs = documents.filter((d) => d.project_id === projectId);
+        sourceDocs.forEach((d) => {
+            documents.push({
+                ...d,
+                id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                project_id: newProjId,
+                folder_id: d.folder_id ? (folderIdMap.get(d.folder_id) || null) : null,
+                created_at: new Date().toISOString(),
+            });
+        });
+        setLocalStorage("lexos_documents", documents);
+        
+        return newProj;
+    },
+
+    setDocumentPrecedent: async (projectId: string, documentId: string, isPrecedent: boolean): Promise<{ id: string; is_precedent: boolean }> => {
+        await delay(50);
+        const documents = getLocalStorage<Document[]>("lexos_documents", DEFAULT_DOCUMENTS);
+        const doc = documents.find((d) => d.id === documentId);
+        if (doc) {
+            doc.is_precedent = isPrecedent;
+            setLocalStorage("lexos_documents", documents);
+        }
+        return { id: documentId, is_precedent: isPrecedent };
+    },
+
+    listClients: async (): Promise<Client[]> => {
+        await delay(50);
+        return getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
+    },
+    
+    createClient: async (body: { name: string; notes?: string }): Promise<Client> => {
+        await delay(100);
+        const clients = getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
+        const newClient: Client = {
+            id: `cli-${Date.now()}`,
+            user_id: "demo-user-id",
+            name: body.name,
+            notes: body.notes || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        clients.push(newClient);
+        setLocalStorage("lexos_clients", clients);
+        return newClient;
+    },
+    
+    updateClient: async (clientId: string, body: { name?: string; notes?: string | null }): Promise<Client> => {
+        await delay(100);
+        const clients = getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
+        const idx = clients.findIndex((c) => c.id === clientId);
+        if (idx === -1) throw new Error("Client not found");
+        
+        const updated = {
+            ...clients[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        clients[idx] = updated;
+        setLocalStorage("lexos_clients", clients);
+        return updated;
+    },
+    
+    deleteClient: async (clientId: string): Promise<void> => {
+        await delay(100);
+        const clients = getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
+        setLocalStorage("lexos_clients", clients.filter((c) => c.id !== clientId));
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
+        projects.forEach((p) => {
+            if (p.client_id === clientId) p.client_id = null;
+        });
+        setLocalStorage("lexos_projects", projects);
+    },
+
+    listProjectMemories: async (projectId: string): Promise<ProjectMemory[]> => {
+        await delay(50);
+        const memories = getLocalStorage<ProjectMemory[]>("lexos_project_memories", DEFAULT_PROJECT_MEMORIES);
+        return memories.filter((m) => m.project_id === projectId);
+    },
+    
+    createProjectMemory: async (projectId: string, body: { kind: ProjectMemory["kind"]; content: string }): Promise<ProjectMemory> => {
+        await delay(100);
+        const memories = getLocalStorage<ProjectMemory[]>("lexos_project_memories", DEFAULT_PROJECT_MEMORIES);
+        const newMemory: ProjectMemory = {
+            id: `mem-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            kind: body.kind,
+            content: body.content,
+            source: "user",
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        memories.push(newMemory);
+        setLocalStorage("lexos_project_memories", memories);
+        return newMemory;
+    },
+    
+    updateProjectMemory: async (projectId: string, memoryId: string, body: { kind?: ProjectMemory["kind"]; content?: string }): Promise<ProjectMemory> => {
+        await delay(100);
+        const memories = getLocalStorage<ProjectMemory[]>("lexos_project_memories", DEFAULT_PROJECT_MEMORIES);
+        const idx = memories.findIndex((m) => m.id === memoryId);
+        if (idx === -1) throw new Error("Memory not found");
+        
+        const updated = {
+            ...memories[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        memories[idx] = updated;
+        setLocalStorage("lexos_project_memories", memories);
+        return updated;
+    },
+    
+    deleteProjectMemory: async (projectId: string, memoryId: string): Promise<void> => {
+        await delay(100);
+        const memories = getLocalStorage<ProjectMemory[]>("lexos_project_memories", DEFAULT_PROJECT_MEMORIES);
+        setLocalStorage("lexos_project_memories", memories.filter((m) => m.id !== memoryId));
+    },
+
+    listProjectDeadlines: async (projectId: string): Promise<ProjectDeadline[]> => {
+        await delay(50);
+        const deadlines = getLocalStorage<ProjectDeadline[]>("lexos_project_deadlines", DEFAULT_PROJECT_DEADLINES);
+        return deadlines.filter((d) => d.project_id === projectId);
+    },
+    
+    createProjectDeadline: async (projectId: string, body: { title: string; due_date: string; notes?: string }): Promise<ProjectDeadline> => {
+        await delay(100);
+        const deadlines = getLocalStorage<ProjectDeadline[]>("lexos_project_deadlines", DEFAULT_PROJECT_DEADLINES);
+        const newDeadline: ProjectDeadline = {
+            id: `dl-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            title: body.title,
+            due_date: body.due_date,
+            notes: body.notes || null,
+            status: "pending",
+            source: "user",
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        deadlines.push(newDeadline);
+        setLocalStorage("lexos_project_deadlines", deadlines);
+        return newDeadline;
+    },
+    
+    updateProjectDeadline: async (projectId: string, deadlineId: string, body: { title?: string; due_date?: string; notes?: string | null; status?: ProjectDeadline["status"] }): Promise<ProjectDeadline> => {
+        await delay(100);
+        const deadlines = getLocalStorage<ProjectDeadline[]>("lexos_project_deadlines", DEFAULT_PROJECT_DEADLINES);
+        const idx = deadlines.findIndex((d) => d.id === deadlineId);
+        if (idx === -1) throw new Error("Deadline not found");
+        
+        const updated = {
+            ...deadlines[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        deadlines[idx] = updated;
+        setLocalStorage("lexos_project_deadlines", deadlines);
+        return updated;
+    },
+    
+    deleteProjectDeadline: async (projectId: string, deadlineId: string): Promise<void> => {
+        await delay(100);
+        const deadlines = getLocalStorage<ProjectDeadline[]>("lexos_project_deadlines", DEFAULT_PROJECT_DEADLINES);
+        setLocalStorage("lexos_project_deadlines", deadlines.filter((d) => d.id !== deadlineId));
+    },
+
+    listProjectHearings: async (projectId: string): Promise<ProjectHearing[]> => {
+        await delay(50);
+        const hearings = getLocalStorage<ProjectHearing[]>("lexos_project_hearings", DEFAULT_PROJECT_HEARINGS);
+        return hearings.filter((h) => h.project_id === projectId);
+    },
+    
+    createProjectHearing: async (projectId: string, body: { purpose: string; hearing_date: string; court?: string; case_number?: string; notes?: string }): Promise<ProjectHearing> => {
+        await delay(100);
+        const hearings = getLocalStorage<ProjectHearing[]>("lexos_project_hearings", DEFAULT_PROJECT_HEARINGS);
+        const newHearing: ProjectHearing = {
+            id: `hr-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            purpose: body.purpose,
+            court: body.court || null,
+            case_number: body.case_number || null,
+            hearing_date: body.hearing_date,
+            notes: body.notes || null,
+            status: "scheduled",
+            source: "user",
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        hearings.push(newHearing);
+        setLocalStorage("lexos_project_hearings", hearings);
+        return newHearing;
+    },
+    
+    updateProjectHearing: async (projectId: string, hearingId: string, body: { purpose?: string; hearing_date?: string; court?: string | null; case_number?: string | null; notes?: string | null; status?: ProjectHearing["status"] }): Promise<ProjectHearing> => {
+        await delay(100);
+        const hearings = getLocalStorage<ProjectHearing[]>("lexos_project_hearings", DEFAULT_PROJECT_HEARINGS);
+        const idx = hearings.findIndex((h) => h.id === hearingId);
+        if (idx === -1) throw new Error("Hearing not found");
+        
+        const updated = {
+            ...hearings[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        hearings[idx] = updated;
+        setLocalStorage("lexos_project_hearings", hearings);
+        return updated;
+    },
+    
+    deleteProjectHearing: async (projectId: string, hearingId: string): Promise<void> => {
+        await delay(100);
+        const hearings = getLocalStorage<ProjectHearing[]>("lexos_project_hearings", DEFAULT_PROJECT_HEARINGS);
+        setLocalStorage("lexos_project_hearings", hearings.filter((h) => h.id !== hearingId));
+    },
+
+    listProjectParties: async (projectId: string): Promise<ProjectParty[]> => {
+        await delay(50);
+        const parties = getLocalStorage<ProjectParty[]>("lexos_project_parties", DEFAULT_PROJECT_PARTIES);
+        return parties.filter((p) => p.project_id === projectId);
+    },
+    
+    createProjectParty: async (projectId: string, body: { name: string; role: ProjectParty["role"]; notes?: string }): Promise<ProjectParty> => {
+        await delay(100);
+        const parties = getLocalStorage<ProjectParty[]>("lexos_project_parties", DEFAULT_PROJECT_PARTIES);
+        const newParty: ProjectParty = {
+            id: `pty-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            name: body.name,
+            role: body.role,
+            notes: body.notes || null,
+            source: "user",
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        parties.push(newParty);
+        setLocalStorage("lexos_project_parties", parties);
+        return newParty;
+    },
+    
+    updateProjectParty: async (projectId: string, partyId: string, body: { name?: string; role?: ProjectParty["role"]; notes?: string | null }): Promise<ProjectParty> => {
+        await delay(100);
+        const parties = getLocalStorage<ProjectParty[]>("lexos_project_parties", DEFAULT_PROJECT_PARTIES);
+        const idx = parties.findIndex((p) => p.id === partyId);
+        if (idx === -1) throw new Error("Party not found");
+        
+        const updated = {
+            ...parties[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        parties[idx] = updated;
+        setLocalStorage("lexos_project_parties", parties);
+        return updated;
+    },
+    
+    deleteProjectParty: async (projectId: string, partyId: string): Promise<void> => {
+        await delay(100);
+        const parties = getLocalStorage<ProjectParty[]>("lexos_project_parties", DEFAULT_PROJECT_PARTIES);
+        setLocalStorage("lexos_project_parties", parties.filter((p) => p.id !== partyId));
+    },
+
+    runConflictCheck: async (body: { names?: string[]; project_id?: string }): Promise<ConflictCheckResponse> => {
+        await delay(300);
+        const namesToCheck = body.names || [];
+        const parties = getLocalStorage<ProjectParty[]>("lexos_project_parties", DEFAULT_PROJECT_PARTIES);
+        const clients = getLocalStorage<Client[]>("lexos_clients", DEFAULT_CLIENTS);
+        const projects = getLocalStorage<Project[]>("lexos_projects", DEFAULT_PROJECTS);
+
+        const queries = namesToCheck.map((name) => {
+            const matches: ConflictMatch[] = [];
+
+            clients.forEach((client) => {
+                if (client.name.toLowerCase().includes(name.toLowerCase())) {
+                    const match_strength = client.name.toLowerCase() === name.toLowerCase() ? "exact" as const : "strong" as const;
+                    matches.push({
+                        matched_name: client.name,
+                        match_kind: "client",
+                        role: "client",
+                        match_strength,
+                        severity: "potential_conflict",
+                        project: null,
+                        client: { id: client.id, name: client.name },
+                    });
+                }
+            });
+
+            parties.forEach((party) => {
+                if (party.name.toLowerCase().includes(name.toLowerCase())) {
+                    const match_strength = party.name.toLowerCase() === name.toLowerCase() ? "exact" as const : "strong" as const;
+                    const project = projects.find((p) => p.id === party.project_id) || null;
+                    matches.push({
+                        matched_name: party.name,
+                        match_kind: "party",
+                        role: party.role,
+                        match_strength,
+                        severity: party.role === "counterparty" ? "potential_conflict" as const : "related_match" as const,
+                        project: project ? { id: project.id, name: project.name } : null,
+                        client: null,
+                    });
+                }
+            });
+
+            return { name, matches };
+        });
+
+        return {
+            queries,
+            checked_at: new Date().toISOString(),
+        };
+    },
+
+    getProjectTimeline: async (projectId: string, opts?: { before?: string; limit?: number }): Promise<TimelineResponse> => {
+        await delay(100);
+        
+        const documents = getLocalStorage<Document[]>("lexos_documents", DEFAULT_DOCUMENTS).filter(d => d.project_id === projectId);
+        const chats = getLocalStorage<Chat[]>("lexos_chats", []).filter(c => c.project_id === projectId);
+        const deadlines = getLocalStorage<ProjectDeadline[]>("lexos_project_deadlines", DEFAULT_PROJECT_DEADLINES).filter(d => d.project_id === projectId);
+        const parties = getLocalStorage<ProjectParty[]>("lexos_project_parties", DEFAULT_PROJECT_PARTIES).filter(p => p.project_id === projectId);
+        const memories = getLocalStorage<ProjectMemory[]>("lexos_project_memories", DEFAULT_PROJECT_MEMORIES).filter(m => m.project_id === projectId);
+        
+        const events: TimelineEvent[] = [];
+        
+        documents.forEach((doc) => {
+            events.push({
+                id: `evt-doc-${doc.id}`,
+                type: "document_created",
+                at: doc.created_at || new Date().toISOString(),
+                title: "Document Added",
+                detail: `${doc.filename} added to files`,
+                refs: { document_id: doc.id }
+            });
+        });
+        
+        chats.forEach((chat) => {
+            events.push({
+                id: `evt-chat-${chat.id}`,
+                type: "chat_created",
+                at: chat.created_at,
+                title: "Assistant Chat Started",
+                detail: chat.title || "Untitled Research Chat",
+                refs: { chat_id: chat.id }
+            });
+        });
+        
+        deadlines.forEach((dl) => {
+            events.push({
+                id: `evt-dl-${dl.id}`,
+                type: "deadline_created",
+                at: dl.created_at,
+                title: "Deadline Calendar Entry",
+                detail: `${dl.title} (due ${dl.due_date})`,
+            });
+        });
+        
+        parties.forEach((p) => {
+            events.push({
+                id: `evt-pty-${p.id}`,
+                type: "party_added",
+                at: p.created_at,
+                title: "Matter Party Added",
+                detail: `${p.name} added as ${p.role.replace(/_/g, " ")}`,
+            });
+        });
+        
+        memories.forEach((m) => {
+            events.push({
+                id: `evt-mem-${m.id}`,
+                type: "memory_saved",
+                at: m.created_at,
+                title: `Matter ${m.kind.charAt(0).toUpperCase() + m.kind.slice(1)} Logged`,
+                detail: m.content.length > 50 ? m.content.slice(0, 47) + "..." : m.content,
+            });
+        });
+        
+        events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+        
+        let filteredEvents = events;
+        if (opts?.before) {
+            filteredEvents = events.filter(e => new Date(e.at).getTime() < new Date(opts.before!).getTime());
+        }
+        
+        const limit = opts?.limit || 10;
+        const pageEvents = filteredEvents.slice(0, limit);
+        const nextBefore = filteredEvents.length > limit ? pageEvents[pageEvents.length - 1].at : null;
+        
+        return {
+            events: pageEvents,
+            next_before: nextBefore,
+        };
+    },
+
+    listProjectTasks: async (projectId: string): Promise<ProjectTask[]> => {
+        await delay(50);
+        const tasks = getLocalStorage<ProjectTask[]>("lexos_project_tasks", DEFAULT_PROJECT_TASKS);
+        return tasks.filter((t) => t.project_id === projectId).sort((a, b) => a.position - b.position);
+    },
+    
+    createProjectTask: async (projectId: string, body: { title: string; notes?: string }): Promise<ProjectTask> => {
+        await delay(100);
+        const tasks = getLocalStorage<ProjectTask[]>("lexos_project_tasks", DEFAULT_PROJECT_TASKS);
+        
+        const projectTasks = tasks.filter((t) => t.project_id === projectId);
+        let maxPos = -1;
+        projectTasks.forEach((t) => {
+            if (t.position > maxPos) maxPos = t.position;
+        });
+        
+        const newTask: ProjectTask = {
+            id: `tsk-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            title: body.title,
+            notes: body.notes || null,
+            status: "pending",
+            position: maxPos + 1,
+            source: "user",
+            template_id: null,
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        tasks.push(newTask);
+        setLocalStorage("lexos_project_tasks", tasks);
+        return newTask;
+    },
+    
+    updateProjectTask: async (projectId: string, taskId: string, body: { title?: string; notes?: string | null; status?: ProjectTask["status"]; position?: number }): Promise<ProjectTask> => {
+        await delay(100);
+        const tasks = getLocalStorage<ProjectTask[]>("lexos_project_tasks", DEFAULT_PROJECT_TASKS);
+        const idx = tasks.findIndex((t) => t.id === taskId);
+        if (idx === -1) throw new Error("Task not found");
+        
+        const updated = {
+            ...tasks[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        tasks[idx] = updated;
+        setLocalStorage("lexos_project_tasks", tasks);
+        return updated;
+    },
+    
+    deleteProjectTask: async (projectId: string, taskId: string): Promise<void> => {
+        await delay(100);
+        const tasks = getLocalStorage<ProjectTask[]>("lexos_project_tasks", DEFAULT_PROJECT_TASKS);
+        setLocalStorage("lexos_project_tasks", tasks.filter((t) => t.id !== taskId));
+    },
+
+    listMatterTemplates: async (): Promise<MatterTemplate[]> => {
+        await delay(50);
+        return getLocalStorage<MatterTemplate[]>("lexos_matter_templates", DEFAULT_MATTER_TEMPLATES);
+    },
+    
+    applyMatterTemplate: async (projectId: string, templateId: string): Promise<{ added: number; tasks: ProjectTask[] }> => {
+        await delay(200);
+        const templates = getLocalStorage<MatterTemplate[]>("lexos_matter_templates", DEFAULT_MATTER_TEMPLATES);
+        const template = templates.find((t) => t.id === templateId);
+        if (!template) throw new Error("Template not found");
+        
+        const tasks = getLocalStorage<ProjectTask[]>("lexos_project_tasks", DEFAULT_PROJECT_TASKS);
+        
+        const projectTasks = tasks.filter((t) => t.project_id === projectId);
+        let maxPos = -1;
+        projectTasks.forEach((t) => {
+            if (t.position > maxPos) maxPos = t.position;
+        });
+        
+        const addedTasks: ProjectTask[] = [];
+        template.tasks.forEach((taskTitle, idx) => {
+            const newTask: ProjectTask = {
+                id: `tsk-${templateId}-${idx}-${Date.now()}`,
+                project_id: projectId,
+                user_id: "demo-user-id",
+                title: taskTitle,
+                notes: null,
+                status: "pending",
+                position: maxPos + 1 + idx,
+                source: "template",
+                template_id: templateId,
+                source_chat_id: null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            };
+            tasks.push(newTask);
+            addedTasks.push(newTask);
+        });
+        
+        setLocalStorage("lexos_project_tasks", tasks);
+        return {
+            added: addedTasks.length,
+            tasks: addedTasks,
+        };
     }
 };

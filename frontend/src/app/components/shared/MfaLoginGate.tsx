@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/contexts/UserProfileContext";
 import { needsMfaVerification } from "./MfaVerificationPopup";
@@ -13,7 +13,6 @@ const MFA_VERIFIED_GRACE_MS = 60_000;
 export function MfaLoginGate({ children }: { children: ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
-    const searchParams = useSearchParams();
     const { user } = useAuth();
     const { profile, loading } = useUserProfile();
     const [gateState, setGateState] = useState<GateState>("idle");
@@ -62,6 +61,7 @@ export function MfaLoginGate({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user || loading || !profile?.mfaOnLogin) return;
 
+        const searchParams = new URLSearchParams(window.location.search);
         if (gateState === "required" && !isVerifyPage) {
             if (hasRecentMfaVerification()) {
                 setGateState("verified");
@@ -81,9 +81,13 @@ export function MfaLoginGate({ children }: { children: ReactNode }) {
         pathname,
         profile?.mfaOnLogin,
         router,
-        searchParams,
         user,
     ]);
+
+    const isPublicRoute = pathname === "/" || pathname === "/login" || pathname === "/signup";
+    if (isPublicRoute) {
+        return <>{children}</>;
+    }
 
     if (user && loading) {
         return gateState === "verified" ? (

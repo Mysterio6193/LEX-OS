@@ -23,6 +23,11 @@ export default function SupportPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const feedbackTypes: {
         value: FeedbackType;
@@ -81,6 +86,18 @@ export default function SupportPage() {
             setIsSubmitting(false);
         }
     };
+
+    if (!mounted) {
+        return null;
+    }
+
+    if (authLoading) {
+        return (
+            <div className="flex min-h-dvh items-center justify-center bg-gray-50/80">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700" />
+            </div>
+        );
+    }
 
     if (isSubmitted) {
         return (
