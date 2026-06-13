@@ -171,6 +171,15 @@ For updating existing deployments, run the incremental migration files sequentia
 9. **👥 Cloning & Archival** — Clone a matter's memory/parties/tasks into a new matter, and archive closed matters out of the default lists while keeping them accessible.
 10. **🔍 Firm Knowledge Search** — The `search_firm_knowledge` tool lets the assistant answer "how do we usually handle X" by searching memories, deadlines, tasks, parties, clients, and document names across all your matters, citing the matter each result came from.
 
+### 🇮🇳 India practice features
+
+11. **⚖️ India matter types & drafting** — Built-in matter templates for Indian practice (Writ Petition Art. 226/32, Bail Application BNSS/CrPC, Insolvency NCLT/IBC, Cheque Dishonour S.138 NI Act, Arbitration A&C Act 1996, Consumer Complaint CP Act 2019, Civil Suit CPC), and assistant drafting of India-standard documents (vakalatnama, legal notice incl. S.138/S.80 notices, plaint, written statement, bail application, affidavit) with correct cause title, grounds, prayer, and verification.
+12. **🏛️ Court / forum metadata** — Each matter records its matter type, court, case number, jurisdiction, and filing date (in **Project Details**), shown on the Overview and injected into every chat so the assistant knows the forum.
+13. **📜 Court Hearings (cause list)** — The **Hearings** tab tracks purpose/stage, court, case number, next date, and status (scheduled/adjourned/done); the assistant records hearings from chat via `save_hearing`, and upcoming hearings surface on the Overview and in every chat.
+14. **🧾 GST billing & invoices** — The **Billing** tab captures time entries (the assistant logs them via `save_time_entry`) and generates GST-compliant invoices for legal services (SAC 9982) — CGST 9% + SGST 9% intra-state or IGST 18% inter-state — based on the firm's GSTIN/home state and the place of supply, with draft/sent/paid tracking.
+
+> For existing deployments, apply the incremental migrations in [backend/oss-migrations/](backend/oss-migrations): `20260613_project_court_metadata.sql`, `20260613_project_hearings.sql`, `20260613_billing_settings.sql`, and `20260613_billing.sql` (the earlier `20260612_*` migrations cover memory, deadlines, clients, precedents, parties, tasks, and archival). A fresh database gets all of this from `schema.sql`.
+
 ---
 
 ## 🇮🇳 7. Indian Kanoon Integration
