@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
     Briefcase,
     CalendarClock,
+    FileSignature,
     History,
     ListChecks,
     Loader2,
@@ -86,10 +87,12 @@ export function ProjectOverviewTab({
     projectId,
     project,
     onNavigate,
+    onDraftStatusReport,
 }: {
     projectId: string;
     project: Project | null;
     onNavigate: (tab: ProjectTab) => void;
+    onDraftStatusReport: () => void;
 }) {
     const [parties, setParties] = useState<ProjectParty[]>([]);
     const [deadlines, setDeadlines] = useState<ProjectDeadline[]>([]);
@@ -143,6 +146,15 @@ export function ProjectOverviewTab({
 
     return (
         <div className="px-4 py-4">
+            <div className="mb-3 flex items-center justify-end">
+                <button
+                    onClick={onDraftStatusReport}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-gray-200 px-3 text-xs text-gray-600 transition-colors hover:border-gray-400"
+                >
+                    <FileSignature className="h-3.5 w-3.5 text-gray-400" />
+                    Draft status report
+                </button>
+            </div>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
                 <SectionCard
                     icon={Briefcase}

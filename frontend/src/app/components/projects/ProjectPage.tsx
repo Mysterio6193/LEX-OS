@@ -618,7 +618,20 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
     const [search, setSearch] = useState("");
 
     const router = useRouter();
-    const { saveChat } = useChatHistoryContext();
+    const { saveChat, setNewChatMessages } = useChatHistoryContext();
+
+    async function handleDraftStatusReport() {
+        setNewChatMessages([
+            {
+                role: "user",
+                content:
+                    "Draft a client-ready status report for this matter, summarising where things stand, upcoming deadlines, open items, and next steps.",
+            },
+        ]);
+        const id = await saveChat(projectId);
+        if (id) router.push(`/projects/${projectId}/assistant/chat/${id}`);
+        else setNewChatMessages(null);
+    }
 
     function handleTabChange(newTab: ProjectTab) {
         const base = `/projects/${projectId}`;
@@ -3526,6 +3539,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                             projectId={projectId}
                             project={project}
                             onNavigate={handleTabChange}
+                            onDraftStatusReport={handleDraftStatusReport}
                         />
                     )}
                         </>

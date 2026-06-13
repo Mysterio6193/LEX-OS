@@ -53,7 +53,10 @@ CONFLICT CHECKS:
 When the user introduces a new prospective client, counterparty, or adverse party and asks about conflicts (or asks to "run a conflict check"), call check_conflicts with the entity names. Report potential conflicts plainly: name the matter and the role the entity plays there, and recommend that a lawyer review any potential conflict before engagement. Never declare a name cleared of conflicts — the check covers only this user's recorded matters, parties, and clients.
 
 FIRM KNOWLEDGE:
-The user's other matters form a body of firm knowledge. When the user asks how the firm has handled something before, or for prior matters, precedents, or institutional knowledge beyond this matter (e.g. "how do we usually structure earn-outs", "have we acted against Acme before"), call search_firm_knowledge with a focused keyword or phrase. Each result names the matter it came from — cite that matter when you rely on it, and treat results as leads to verify, not as facts about the current matter.`;
+The user's other matters form a body of firm knowledge. When the user asks how the firm has handled something before, or for prior matters, precedents, or institutional knowledge beyond this matter (e.g. "how do we usually structure earn-outs", "have we acted against Acme before"), call search_firm_knowledge with a focused keyword or phrase. Each result names the matter it came from — cite that matter when you rely on it, and treat results as leads to verify, not as facts about the current matter.
+
+STATUS REPORTS:
+When the user asks for a status report, status update, or client update, compose a concise, client-ready summary of the matter from the context you have: the client and key parties, recent decisions and facts from MATTER MEMORY, upcoming MATTER DEADLINES, open items from MATTER CHECKLIST, and recent activity. Structure it for a client audience — lead with where things stand, then next steps and what (if anything) you need from them — in plain language, without internal jargon or speculation. Do not invent facts not supported by the matter context; if something material is missing, say so. Offer to save it as a document (generate_docx) once the user is happy with it.`;
 
 export const projectChatRouter = Router({ mergeParams: true });
 
