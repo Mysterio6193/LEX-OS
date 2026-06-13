@@ -26,30 +26,40 @@ let mockUser: any = {
     new_email: null,
 };
 
+const authListeners: ((event: any, session: any) => any)[] = [];
+
+const triggerAuthChange = (event: string, session: any) => {
+    authListeners.forEach((cb) => cb(event, session));
+};
+
 const mockAuth = {
     getSession: async () => {
         return {
             data: {
-                session: {
+                session: mockUser ? {
                     access_token: "demo-access-token",
                     user: mockUser,
-                },
+                } : null,
             },
             error: null,
         };
     },
     onAuthStateChange: (callback: (event: any, session: any) => any) => {
+        authListeners.push(callback);
         // Trigger callback with session immediately
         setTimeout(() => {
-            callback("SIGNED_IN", {
+            callback("SIGNED_IN", mockUser ? {
                 access_token: "demo-access-token",
                 user: mockUser,
-            });
+            } : null);
         }, 0);
         return {
             data: {
                 subscription: {
-                    unsubscribe: () => {},
+                    unsubscribe: () => {
+                        const index = authListeners.indexOf(callback);
+                        if (index !== -1) authListeners.splice(index, 1);
+                    },
                 },
             },
         };
@@ -60,10 +70,12 @@ const mockAuth = {
             email: email || "demo@lexos.org",
             new_email: null,
         };
+        const session = { access_token: "demo-access-token", user: mockUser };
+        triggerAuthChange("SIGNED_IN", session);
         return {
             data: {
                 user: mockUser,
-                session: { access_token: "demo-access-token", user: mockUser },
+                session,
             },
             error: null,
         };
@@ -74,15 +86,19 @@ const mockAuth = {
             email: email || "demo@lexos.org",
             new_email: null,
         };
+        const session = { access_token: "demo-access-token", user: mockUser };
+        triggerAuthChange("SIGNED_IN", session);
         return {
             data: {
                 user: mockUser,
-                session: { access_token: "demo-access-token", user: mockUser },
+                session,
             },
             error: null,
         };
     },
     signOut: async () => {
+        mockUser = null;
+        triggerAuthChange("SIGNED_OUT", null);
         return { error: null };
     },
     updateUser: async (attributes: any) => {
@@ -92,6 +108,8 @@ const mockAuth = {
                 new_email: attributes.email,
             };
         }
+        const session = { access_token: "demo-access-token", user: mockUser };
+        triggerAuthChange("USER_UPDATED", session);
         return {
             data: { user: mockUser },
             error: null,
