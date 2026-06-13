@@ -41,6 +41,7 @@ import { safeErrorMessage } from "./safeError";
 import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 import { saveProjectDeadline } from "./projectDeadlines";
 import { saveProjectHearing } from "./projectHearings";
+import { saveTimeEntry } from "./billing";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
@@ -325,6 +326,33 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["purpose", "hearing_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_time_entry",
+      description:
+        "Log a billable time entry for this matter. Entries appear in the project's Billing tab and can be invoiced. Use it when the user mentions time spent on work (e.g. 'spent 45 minutes reviewing the SPA', 'put down an hour for the client call'). Convert the time to minutes. The hourly rate defaults to the firm's configured rate.",
+      parameters: {
+        type: "object",
+        properties: {
+          description: {
+            type: "string",
+            description: "What the work was (e.g. 'Reviewed and marked up the SPA').",
+          },
+          minutes: {
+            type: "integer",
+            description: "Time spent, in minutes.",
+          },
+          entry_date: {
+            type: "string",
+            description:
+              "Date of the work in YYYY-MM-DD format. Defaults to today if omitted.",
+          },
+        },
+        required: ["description", "minutes"],
       },
     },
   },
@@ -2172,6 +2200,12 @@ export type HearingSavedResult = {
   court?: string | null;
 };
 
+export type TimeEntrySavedResult = {
+  time_entry_id: string;
+  description: string;
+  minutes: number;
+};
+
 export type TaskSavedResult = {
   task_id: string;
   title: string;
@@ -2532,6 +2566,7 @@ export async function runToolCalls(
   memoriesSaved: MemorySavedResult[];
   deadlinesSaved: DeadlineSavedResult[];
   hearingsSaved: HearingSavedResult[];
+  timeEntriesSaved: TimeEntrySavedResult[];
   partiesSaved: PartySavedResult[];
   conflictChecks: ConflictCheckResultEvent[];
   firmKnowledgeSearches: FirmKnowledgeSearchedResult[];
@@ -2553,6 +2588,7 @@ export async function runToolCalls(
   const memoriesSaved: MemorySavedResult[] = [];
   const deadlinesSaved: DeadlineSavedResult[] = [];
   const hearingsSaved: HearingSavedResult[] = [];
+  const timeEntriesSaved: TimeEntrySavedResult[] = [];
   const partiesSaved: PartySavedResult[] = [];
   const conflictChecks: ConflictCheckResultEvent[] = [];
   const firmKnowledgeSearches: FirmKnowledgeSearchedResult[] = [];
@@ -2848,6 +2884,54 @@ export async function runToolCalls(
           content: JSON.stringify(
             saved.ok
               ? { ok: true, hearing_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
+    } else if (tc.function.name === "save_time_entry") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Time tracking is only available inside project chats.",
+          }),
+        });
+      } else {
+        const description = String(args.description ?? "").trim();
+        const minutes = Math.max(
+          0,
+          Math.round(Number(args.minutes ?? 0)) || 0,
+        );
+        const saved = await saveTimeEntry({
+          projectId,
+          userId,
+          description,
+          minutes,
+          entryDate:
+            typeof args.entry_date === "string" ? args.entry_date : undefined,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: TimeEntrySavedResult = {
+            time_entry_id: saved.id,
+            description,
+            minutes,
+          };
+          timeEntriesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "time_entry_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, time_entry_id: saved.id }
               : { ok: false, error: saved.error },
           ),
         });
@@ -4163,6 +4247,7 @@ export async function runToolCalls(
     memoriesSaved,
     deadlinesSaved,
     hearingsSaved,
+    timeEntriesSaved,
     partiesSaved,
     conflictChecks,
     firmKnowledgeSearches,
@@ -4394,6 +4479,12 @@ type AssistantEvent =
       purpose: string;
       hearing_date: string;
       court?: string | null;
+    }
+  | {
+      type: "time_entry_saved";
+      time_entry_id: string;
+      description: string;
+      minutes: number;
     }
   | { type: "party_saved"; party_id: string; name: string; role: string }
   | { type: "task_saved"; task_id: string; title: string }
@@ -4711,6 +4802,7 @@ export async function runLLMStream(params: {
           memoriesSaved,
           deadlinesSaved,
           hearingsSaved,
+          timeEntriesSaved,
           partiesSaved,
           conflictChecks,
           firmKnowledgeSearches,
@@ -4797,6 +4889,14 @@ export async function runLLMStream(params: {
             purpose: h.purpose,
             hearing_date: h.hearing_date,
             court: h.court,
+          });
+        }
+        for (const te of timeEntriesSaved) {
+          events.push({
+            type: "time_entry_saved",
+            time_entry_id: te.time_entry_id,
+            description: te.description,
+            minutes: te.minutes,
           });
         }
         for (const p of partiesSaved) {
