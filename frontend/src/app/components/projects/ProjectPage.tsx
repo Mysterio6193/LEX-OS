@@ -637,6 +637,13 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
         else setNewChatMessages(null);
     }
 
+    async function handleDraftDocument(prompt: string) {
+        setNewChatMessages([{ role: "user", content: prompt }]);
+        const id = await saveChat(projectId);
+        if (id) router.push(`/projects/${projectId}/assistant/chat/${id}`);
+        else setNewChatMessages(null);
+    }
+
     function handleTabChange(newTab: ProjectTab) {
         const base = `/projects/${projectId}`;
         const url = newTab === "overview" ? base : `${base}?tab=${newTab}`;
@@ -3577,6 +3584,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                             project={project}
                             onNavigate={handleTabChange}
                             onDraftStatusReport={handleDraftStatusReport}
+                            onDraftDocument={handleDraftDocument}
                         />
                     )}
                         </>
