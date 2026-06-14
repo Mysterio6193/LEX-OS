@@ -67,33 +67,45 @@ const SELECT_COLS =
 export async function hybridRetrieve(args: {
   query: string;
   projectIds: string[];
+  /** When set, restrict retrieval to these documents (e.g. a vault). */
+  documentIds?: string[];
   db: Db;
   apiKeys?: UserApiKeys;
   limit?: number;
 }): Promise<RetrievalHit[]> {
   const { db, query } = args;
   const topK = args.limit ?? DEFAULT_TOP_K;
-  if (!query.trim() || args.projectIds.length === 0) return [];
+  const scopeByDocs = !!args.documentIds && args.documentIds.length > 0;
+  if (!query.trim()) return [];
+  if (!scopeByDocs && args.projectIds.length === 0) return [];
 
   // --- Dense (best-effort; skipped when no embedding key) ---
   const embed = await embedTexts([query], args.apiKeys);
   const denseRows: ChunkRow[] = [];
   if (embed?.embeddings?.[0]) {
-    const { data } = await db.rpc("match_document_chunks", {
-      query_embedding: toVectorLiteral(embed.embeddings[0]),
-      match_project_ids: args.projectIds,
-      match_count: CANDIDATES,
-    });
+    const { data } = scopeByDocs
+      ? await db.rpc("match_chunks_in_documents", {
+          query_embedding: toVectorLiteral(embed.embeddings[0]),
+          match_document_ids: args.documentIds,
+          match_count: CANDIDATES,
+        })
+      : await db.rpc("match_document_chunks", {
+          query_embedding: toVectorLiteral(embed.embeddings[0]),
+          match_project_ids: args.projectIds,
+          match_count: CANDIDATES,
+        });
     for (const r of (data ?? []) as ChunkRow[]) denseRows.push(r);
   }
 
   // --- Sparse (tsvector websearch) ---
-  const { data: sparseData } = await db
+  const sparseBase = db
     .from("document_chunks")
     .select(SELECT_COLS)
-    .in("project_id", args.projectIds)
     .textSearch("tsv", query, { type: "websearch" })
     .limit(CANDIDATES);
+  const { data: sparseData } = scopeByDocs
+    ? await sparseBase.in("document_id", args.documentIds as string[])
+    : await sparseBase.in("project_id", args.projectIds);
   const sparseRows = (sparseData ?? []) as ChunkRow[];
 
   // Index rows by id and fuse the two rankings.

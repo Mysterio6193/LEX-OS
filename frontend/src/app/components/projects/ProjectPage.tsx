@@ -93,6 +93,7 @@ import { ProjectMemoryTab } from "./ProjectMemoryTab";
 import { ProjectDeadlinesTab } from "./ProjectDeadlinesTab";
 import { ProjectHearingsTab } from "./ProjectHearingsTab";
 import { ProjectBillingTab } from "./ProjectBillingTab";
+import { ProjectVaultsTab } from "./ProjectVaultsTab";
 import { ProjectPartiesTab } from "./ProjectPartiesTab";
 import { ProjectTimelineTab } from "./ProjectTimelineTab";
 import { ProjectTasksTab } from "./ProjectTasksTab";
@@ -290,7 +291,8 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
         tabParam === "parties" ||
         tabParam === "timeline" ||
         tabParam === "tasks" ||
-        tabParam === "billing"
+        tabParam === "billing" ||
+        tabParam === "vaults"
             ? tabParam
             : initialTab;
     const [addDocsOpen, setAddDocsOpen] = useState(false);
@@ -2693,6 +2695,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                     { id: "tasks", label: "Checklist" },
                     { id: "parties", label: "Parties" },
                     { id: "billing", label: "Billing" },
+                    { id: "vaults", label: "Vaults" },
                     { id: "timeline", label: "Timeline" },
                 ]}
                 active={tab}
@@ -3548,6 +3551,14 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                     {/* Tab: Billing */}
                     {tab === "billing" && (
                         <ProjectBillingTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Vaults */}
+                    {tab === "vaults" && (
+                        <ProjectVaultsTab
                             projectId={projectId}
                             search={search}
                         />

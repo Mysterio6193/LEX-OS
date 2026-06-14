@@ -23,6 +23,7 @@ import type {
     TimeEntry,
     Invoice,
     InvoiceLineItem,
+    Vault,
     MatterTemplate,
     ProjectParty,
     ProjectTask,
@@ -741,6 +742,74 @@ export async function updateInvoiceStatus(
             body: JSON.stringify({ status }),
         },
     );
+}
+
+// --- Matter Vault (document sets) ---
+
+export async function listVaults(projectId: string): Promise<Vault[]> {
+    if (isDemoMode) return mockApi.listVaults(projectId);
+    return apiRequest<Vault[]>(`/projects/${projectId}/vaults`);
+}
+
+export async function createVault(
+    projectId: string,
+    body: { name: string; description?: string },
+): Promise<Vault> {
+    if (isDemoMode) return mockApi.createVault(projectId, body);
+    return apiRequest<Vault>(`/projects/${projectId}/vaults`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function deleteVault(
+    projectId: string,
+    vaultId: string,
+): Promise<void> {
+    if (isDemoMode) return mockApi.deleteVault(projectId, vaultId);
+    await apiRequest(`/projects/${projectId}/vaults/${vaultId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function getVaultDocuments(
+    projectId: string,
+    vaultId: string,
+): Promise<string[]> {
+    if (isDemoMode) return mockApi.getVaultDocuments(projectId, vaultId);
+    const r = await apiRequest<{ document_ids: string[] }>(
+        `/projects/${projectId}/vaults/${vaultId}/documents`,
+    );
+    return r.document_ids;
+}
+
+export async function setVaultDocuments(
+    projectId: string,
+    vaultId: string,
+    documentIds: string[],
+): Promise<string[]> {
+    if (isDemoMode)
+        return mockApi.setVaultDocuments(projectId, vaultId, documentIds);
+    const r = await apiRequest<{ document_ids: string[] }>(
+        `/projects/${projectId}/vaults/${vaultId}/documents`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ document_ids: documentIds }),
+        },
+    );
+    return r.document_ids;
+}
+
+export async function reindexVault(
+    projectId: string,
+    vaultId: string,
+): Promise<{ documents: number; indexed: number; chunks: number }> {
+    if (isDemoMode) return mockApi.reindexVault(projectId, vaultId);
+    return apiRequest(`/projects/${projectId}/vaults/${vaultId}/reindex`, {
+        method: "POST",
+    });
 }
 
 export async function listProjectParties(
@@ -4339,5 +4408,98 @@ const mockApi = {
         };
         setLocalStorage("lexos_invoices", invoices);
         return invoices[idx];
+    },
+
+    // --- Matter Vault (demo) ---
+
+    listVaults: async (projectId: string): Promise<Vault[]> => {
+        await delay(50);
+        const vaults = getLocalStorage<Vault[]>("lexos_vaults", []);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        return vaults
+            .filter((v) => v.project_id === projectId)
+            .map((v) => ({
+                ...v,
+                document_count: (members[v.id] ?? []).length,
+            }));
+    },
+
+    createVault: async (
+        projectId: string,
+        body: { name: string; description?: string },
+    ): Promise<Vault> => {
+        await delay(100);
+        const vaults = getLocalStorage<Vault[]>("lexos_vaults", []);
+        const vault: Vault = {
+            id: `vault-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            name: body.name,
+            description: body.description || null,
+            document_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        vaults.push(vault);
+        setLocalStorage("lexos_vaults", vaults);
+        return vault;
+    },
+
+    deleteVault: async (projectId: string, vaultId: string): Promise<void> => {
+        await delay(100);
+        const vaults = getLocalStorage<Vault[]>("lexos_vaults", []);
+        setLocalStorage(
+            "lexos_vaults",
+            vaults.filter((v) => v.id !== vaultId),
+        );
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        delete members[vaultId];
+        setLocalStorage("lexos_vault_docs", members);
+    },
+
+    getVaultDocuments: async (
+        projectId: string,
+        vaultId: string,
+    ): Promise<string[]> => {
+        await delay(50);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        return members[vaultId] ?? [];
+    },
+
+    setVaultDocuments: async (
+        projectId: string,
+        vaultId: string,
+        documentIds: string[],
+    ): Promise<string[]> => {
+        await delay(100);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        members[vaultId] = documentIds;
+        setLocalStorage("lexos_vault_docs", members);
+        return documentIds;
+    },
+
+    reindexVault: async (
+        projectId: string,
+        vaultId: string,
+    ): Promise<{ documents: number; indexed: number; chunks: number }> => {
+        await delay(200);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        const n = (members[vaultId] ?? []).length;
+        return { documents: n, indexed: n, chunks: n * 12 };
     }
 };

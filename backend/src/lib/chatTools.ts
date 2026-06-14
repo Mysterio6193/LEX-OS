@@ -45,6 +45,7 @@ import { saveTimeEntry } from "./billing";
 import { computeLimitation, listLimitationKeys } from "./limitation";
 import { hybridRetrieve } from "./rag/retrieve";
 import { listAccessibleProjectIds } from "./access";
+import { getVaultInProject, listVaultDocumentIds } from "./vaults";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
@@ -494,6 +495,11 @@ export const PROJECT_EXTRA_TOOLS = [
             type: "boolean",
             description:
               "If true, restrict the search to the current matter's documents.",
+          },
+          vault_id: {
+            type: "string",
+            description:
+              "If set, restrict the search to the documents in this Vault (document set).",
           },
         },
         required: ["query"],
@@ -3190,6 +3196,14 @@ export async function runToolCalls(
       } else {
         const limit =
           typeof args.limit === "number" ? args.limit : undefined;
+        // Vault scope: restrict to a document set within the current matter.
+        let documentIds: string[] | undefined;
+        const vaultId =
+          typeof args.vault_id === "string" ? args.vault_id : null;
+        if (vaultId && projectId) {
+          const vault = await getVaultInProject(vaultId, projectId, db);
+          if (vault) documentIds = await listVaultDocumentIds(vaultId, db);
+        }
         let projectIds: string[];
         if (args.this_matter_only && projectId) {
           projectIds = [projectId];
@@ -3201,6 +3215,7 @@ export async function runToolCalls(
         const hits = await hybridRetrieve({
           query,
           projectIds,
+          documentIds,
           db,
           apiKeys,
           limit,

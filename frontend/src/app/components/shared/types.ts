@@ -613,6 +613,19 @@ export interface BillingSettings {
   default_hourly_rate: number | null;
 }
 
+// Matter Vault (document sets)
+
+export interface Vault {
+  id: string;
+  project_id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Matter Parties / conflict checking
 
 export type ProjectPartyRole =
