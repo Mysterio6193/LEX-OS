@@ -193,6 +193,21 @@ Configure the provider key in `backend/.env` (using `INDIANKANOON_API_TOKEN`) or
 
 ---
 
+## 🤖 7a. AI Engine (v2 — Agentic Core + RAG)
+
+Phase 1 of the v2 build adds a Harvey-grade engine on top of the existing stack (no rewrite):
+
+- **Agentic core** — an opt-in **Agent mode** on matter chat runs a *planner → executor → verifier* loop: the planner decomposes the goal into a typed plan over the tool registry, the existing tool loop executes it, and a verifier scores confidence and runs the citation guard. The plan and verification stream as a live trace and are persisted in `agent_runs` / `agent_steps`.
+- **Hybrid retrieval (RAG)** — documents are chunked structure-aware (judgment / contract / statute / generic, parent–child, page & section metadata) and indexed into `document_chunks` with a dense `pgvector` embedding **and** a sparse `tsvector`. The `retrieve_context` tool fuses dense + sparse results with Reciprocal Rank Fusion and an optional cross-encoder rerank, scoped to the firm's accessible matters. Rebuild a matter's index with `POST /projects/:id/reindex`.
+- **Citation guard** — in Agent mode, document citations are verified by confirming the quoted text actually appears in the cited source; unresolved citations are surfaced as "unverified" with a coverage-limits note, never presented as settled.
+- **Eval harness** — `cd backend && npm test` runs offline golden checks (limitation arithmetic incl. leap years, citation-guard resolution, RRF fusion, chunker boundaries); CI (`.github/workflows/ci.yml`) gates merges on them.
+
+**New migrations** (apply from `backend/oss-migrations/`): `20260614_document_chunks.sql`, `20260614_match_chunks.sql`, `20260614_agent_runs.sql`. Requires the `vector` extension (Supabase: enable `pgvector`).
+
+**Env:** embeddings use `OPENAI_API_KEY` (default `text-embedding-3-small`, 1536-dim) or `GEMINI_API_KEY`; set `EMBEDDING_MODEL`/`EMBEDDING_DIM` to change (the dim must match the `document_chunks.embedding` column). Optional reranking via `RERANK_API_KEY` (Cohere-style; `RERANK_URL`/`RERANK_MODEL` to override). Validate the full loop locally with `npm run smoke:agent -- <projectId>`.
+
+---
+
 ## 🚀 8. Installation & Running
 
 ### 8.1 Install Dependencies
