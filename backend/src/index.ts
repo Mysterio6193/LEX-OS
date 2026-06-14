@@ -24,6 +24,7 @@ import { workflowsRouter } from "./routes/workflows";
 import { userRouter } from "./routes/user";
 import { downloadsRouter } from "./routes/downloads";
 import { caseLawRouter } from "./routes/caseLaw";
+import { safeErrorLog } from "./lib/safeError";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -183,9 +184,58 @@ app.use("/case-law", caseLawRouter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-if (process.env.VERCEL !== "1") {
-  app.listen(PORT, () => {
-    console.log(`lexOS backend running on port ${PORT}`);
+// 404 for unmatched API routes.
+app.use((_req, res) => {
+  res.status(404).json({ detail: "Not found" });
+});
+
+// Global error handler — async route throws and body-parser errors land here
+// instead of crashing the process or hanging the request. Error text is
+// scrubbed of secrets before logging; clients get a generic message.
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const status =
+      typeof (err as { status?: unknown })?.status === "number"
+        ? (err as { status: number }).status
+        : (err as { type?: string })?.type === "entity.too.large"
+          ? 413
+          : 500;
+    console.error("[unhandled]", safeErrorLog(err));
+    if (res.headersSent) return;
+    res.status(status).json({
+      detail:
+        status === 413
+          ? "Payload too large."
+          : "Internal server error.",
+    });
+  },
+);
+
+const server =
+  process.env.VERCEL !== "1"
+    ? app.listen(PORT, () => {
+        console.log(`lexOS backend running on port ${PORT}`);
+      })
+    : null;
+
+// Crash-safety: log instead of dying on an unhandled async error, and shut
+// down cleanly on a platform stop signal.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", safeErrorLog(reason));
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", safeErrorLog(err));
+});
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    console.log(`[shutdown] received ${signal}`);
+    if (server) server.close(() => process.exit(0));
+    else process.exit(0);
   });
 }
 
