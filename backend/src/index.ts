@@ -97,6 +97,14 @@ const dataDeleteLimiter = makeLimiter({
   message: "Too many data deletion requests. Please try again later.",
 });
 
+// Reindexing embeds every chunk of every document — bound it to protect
+// embedding-provider spend and the database.
+const reindexLimiter = makeLimiter({
+  windowMs: hours(envInt("RATE_LIMIT_REINDEX_WINDOW_HOURS", 1)),
+  max: envInt("RATE_LIMIT_REINDEX_MAX", 20),
+  message: "Too many reindex requests. Please try again later.",
+});
+
 function jsonLimitForPath(path: string): string {
   return "50mb";
 }
@@ -146,6 +154,8 @@ app.put(
   uploadLimiter,
 );
 app.post("/projects/:projectId/documents", uploadLimiter);
+app.post("/projects/:projectId/reindex", reindexLimiter);
+app.post("/projects/:projectId/vaults/:vaultId/reindex", reindexLimiter);
 app.get("/user/export", exportLimiter);
 app.get("/user/chats/export", exportLimiter);
 app.get("/user/tabular-reviews/export", exportLimiter);
