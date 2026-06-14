@@ -17,6 +17,7 @@ import {
   parseInlineCitations,
   verifyCellCitations,
 } from "../lib/tabularCitations";
+import { formatLog, shouldLog } from "../lib/logger";
 
 let passed = 0;
 let failed = 0;
@@ -113,6 +114,24 @@ check("guard: too-short quote rejected", !quoteAppears("yes", "yes it is so"));
     doc,
   );
   check("tabular: fabricated quote unverified", fabricated[0].verified === false);
+}
+
+// --- Structured logger ---
+{
+  const line = formatLog("info", "request", { status: 200, ms: 5 });
+  const parsed = JSON.parse(line) as Record<string, unknown>;
+  eq("logger: level serialized", parsed.level, "info");
+  eq("logger: meta merged", parsed.status, 200);
+  check("logger: timestamp present", typeof parsed.t === "string");
+  check("logger: warn passes info threshold", shouldLog("warn", "info"));
+  check("logger: debug filtered at info", !shouldLog("debug", "info"));
+  // Circular meta must not throw.
+  const circ: Record<string, unknown> = {};
+  circ.self = circ;
+  check(
+    "logger: circular meta falls back",
+    typeof formatLog("error", "x", circ) === "string",
+  );
 }
 
 console.log(`\neval: ${passed} passed, ${failed} failed`);

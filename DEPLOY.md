@@ -66,5 +66,8 @@ backend — useful for trials, not production.
 - **Dependencies:** `npm audit` is clean except one moderate advisory that
   needs a deliberate `@anthropic-ai/sdk` major upgrade (test against a real
   Claude key before adopting).
-- **Recommended next:** error tracking (e.g. Sentry) and structured request
-  logging — not yet wired.
+- **Observability:** the backend emits structured JSON logs (one line per
+  request with a request id; `LOG_LEVEL` controls verbosity) and captures
+  5xx/crash errors (secret-scrubbed). Set `ERROR_WEBHOOK_URL` for Slack-style
+  alerts; point a log shipper at stdout. Swap in Sentry later behind the
+  existing `captureException` surface (`backend/src/lib/observability.ts`).

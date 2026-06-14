@@ -24,7 +24,9 @@ import { workflowsRouter } from "./routes/workflows";
 import { userRouter } from "./routes/user";
 import { downloadsRouter } from "./routes/downloads";
 import { caseLawRouter } from "./routes/caseLaw";
-import { safeErrorLog } from "./lib/safeError";
+import { randomUUID } from "node:crypto";
+import { logger } from "./lib/logger";
+import { captureException } from "./lib/observability";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -139,6 +141,25 @@ app.use(
   }),
 );
 
+// Request tracing + structured access log. A request id is attached to
+// res.locals so handlers and the error handler can correlate logs.
+app.use((req, res, next) => {
+  const requestId = randomUUID();
+  res.locals.requestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+  const start = Date.now();
+  res.on("finish", () => {
+    logger.info("request", {
+      requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      ms: Date.now() - start,
+    });
+  });
+  next();
+});
+
 app.use(generalLimiter);
 
 app.post("/chat", chatLimiter);
@@ -215,7 +236,21 @@ app.use(
         : (err as { type?: string })?.type === "entity.too.large"
           ? 413
           : 500;
-    console.error("[unhandled]", safeErrorLog(err));
+    // Client errors (4xx) are logged at warn without alerting; 5xx are
+    // captured (structured log + optional webhook).
+    if (status >= 500) {
+      captureException(err, {
+        path: _req.path,
+        method: _req.method,
+        requestId: res.locals.requestId,
+      });
+    } else {
+      logger.warn("client_error", {
+        status,
+        path: _req.path,
+        requestId: res.locals.requestId,
+      });
+    }
     if (res.headersSent) return;
     res.status(status).json({
       detail:
@@ -229,21 +264,21 @@ app.use(
 const server =
   process.env.VERCEL !== "1"
     ? app.listen(PORT, () => {
-        console.log(`lexOS backend running on port ${PORT}`);
+        logger.info("server_started", { port: PORT });
       })
     : null;
 
-// Crash-safety: log instead of dying on an unhandled async error, and shut
-// down cleanly on a platform stop signal.
+// Crash-safety: capture instead of dying on an unhandled async error, and
+// shut down cleanly on a platform stop signal.
 process.on("unhandledRejection", (reason) => {
-  console.error("[unhandledRejection]", safeErrorLog(reason));
+  captureException(reason, { kind: "unhandledRejection" });
 });
 process.on("uncaughtException", (err) => {
-  console.error("[uncaughtException]", safeErrorLog(err));
+  captureException(err, { kind: "uncaughtException" });
 });
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.on(signal, () => {
-    console.log(`[shutdown] received ${signal}`);
+    logger.info("shutdown", { signal });
     if (server) server.close(() => process.exit(0));
     else process.exit(0);
   });
