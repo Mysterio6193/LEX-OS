@@ -32,6 +32,7 @@ import {
     listAccessibleProjectIds,
 } from "../lib/access";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
+import { extractVerifiedCitations } from "../lib/tabularCitations";
 
 function formatPromptSuffix(format?: string, tags?: string[]): string {
     switch (format) {
@@ -859,14 +860,22 @@ tabularRouter.post(
             return void res.status(500).json({ detail: "Generation failed" });
         }
 
+        const citations = extractVerifiedCitations(
+            String((result as { summary?: unknown }).summary ?? ""),
+            markdown,
+        );
         await db
             .from("tabular_cells")
-            .update({ content: JSON.stringify(result), status: "done" })
+            .update({
+                content: JSON.stringify(result),
+                citations: citations.length ? citations : null,
+                status: "done",
+            })
             .eq("review_id", reviewId)
             .eq("document_id", document_id)
             .eq("column_index", column_index);
 
-        res.json(result);
+        res.json({ ...result, citations });
     },
 );
 
@@ -1023,17 +1032,27 @@ tabularRouter.post("/:reviewId/generate", requireAuth, async (req, res) => {
                         columnsToProcess,
                         async (columnIndex, result) => {
                             receivedColumns.add(columnIndex);
+                            const citations = extractVerifiedCitations(
+                                String(
+                                    (result as { summary?: unknown }).summary ??
+                                        "",
+                                ),
+                                markdown,
+                            );
                             await db
                                 .from("tabular_cells")
                                 .update({
                                     content: JSON.stringify(result),
+                                    citations: citations.length
+                                        ? citations
+                                        : null,
                                     status: "done",
                                 })
                                 .eq("review_id", reviewId)
                                 .eq("document_id", docId)
                                 .eq("column_index", columnIndex);
                             write(
-                                `data: ${JSON.stringify({ type: "cell_update", document_id: docId, column_index: columnIndex, content: result, status: "done" })}\n\n`,
+                                `data: ${JSON.stringify({ type: "cell_update", document_id: docId, column_index: columnIndex, content: result, citations, status: "done" })}\n\n`,
                             );
                         },
                         api_keys,

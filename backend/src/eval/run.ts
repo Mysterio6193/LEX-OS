@@ -13,6 +13,10 @@ import {
 } from "../lib/agent/citationGuard";
 import { reciprocalRankFusion } from "../lib/rag/retrieve";
 import { chunkDocument } from "../lib/rag/chunker";
+import {
+  parseInlineCitations,
+  verifyCellCitations,
+} from "../lib/tabularCitations";
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +95,24 @@ check("guard: too-short quote rejected", !quoteAppears("yes", "yes it is so"));
   check("chunker: has a parent", chunks.some((c) => c.parentIndex === null));
   check("chunker: has children", chunks.some((c) => c.parentIndex !== null));
   check("chunker: captured page 2", chunks.some((c) => c.page === 2));
+}
+
+// --- Tabular cell citations ---
+{
+  const summary =
+    "Liability is capped at 12 months' fees [[page:9||quote:the Liability Cap shall be twelve months of fees]]. Governing law is Delhi [[page:14||quote:governed by the laws of Delhi]].";
+  const marks = parseInlineCitations(summary);
+  eq("tabular: parsed two citations", marks.length, 2);
+  eq("tabular: first page parsed", marks[0].page, 9);
+  const doc =
+    "Clause 9. The Liability Cap shall be TWELVE months of fees paid in the prior year. Clause 14. This agreement is governed by the laws of Delhi.";
+  const verified = verifyCellCitations(marks, doc);
+  check("tabular: present quotes verified", verified.every((v) => v.verified));
+  const fabricated = verifyCellCitations(
+    parseInlineCitations("Total is ₹5 crore [[page:2||quote:the price is five hundred crore rupees]]."),
+    doc,
+  );
+  check("tabular: fabricated quote unverified", fabricated[0].verified === false);
 }
 
 console.log(`\neval: ${passed} passed, ${failed} failed`);
