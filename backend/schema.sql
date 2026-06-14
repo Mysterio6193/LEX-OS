@@ -3,6 +3,8 @@
 -- to apply the incremental migration files in backend/oss-migrations instead.
 
 create extension if not exists "pgcrypto";
+-- RAG foundation (v2): pgvector for dense retrieval over document_chunks.
+create extension if not exists vector;
 
 -- ---------------------------------------------------------------------------
 -- User profiles
@@ -249,6 +251,51 @@ create table if not exists public.document_edits (
 
 create index if not exists document_edits_document_id_idx
   on public.document_edits(document_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Document chunks (RAG)
+-- ---------------------------------------------------------------------------
+--
+-- Structure-aware chunks with dense (pgvector, 1536-dim) + sparse (tsvector)
+-- representations for hybrid retrieval. See oss-migrations/20260614_document_chunks.sql.
+
+create table if not exists public.document_chunks (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid not null references public.documents(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  user_id text not null,
+  chunk_index integer not null,
+  parent_index integer,
+  text text not null,
+  summary text,
+  embedding vector(1536),
+  tsv tsvector generated always as (to_tsvector('english', coalesce(text, ''))) stored,
+  doc_type text,
+  section_no text,
+  para_no text,
+  page integer,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_document_chunks_document
+  on public.document_chunks(document_id);
+create index if not exists idx_document_chunks_project
+  on public.document_chunks(project_id);
+create index if not exists idx_document_chunks_tsv
+  on public.document_chunks using gin (tsv);
+do $$
+begin
+  begin
+    create index if not exists idx_document_chunks_embedding_hnsw
+      on public.document_chunks using hnsw (embedding vector_cosine_ops);
+  exception when others then
+    create index if not exists idx_document_chunks_embedding_ivf
+      on public.document_chunks using ivfflat (embedding vector_cosine_ops)
+      with (lists = 100);
+  end;
+end;
+$$;
 
 create index if not exists document_edits_message_id_idx
   on public.document_edits(chat_message_id);
@@ -627,6 +674,7 @@ revoke all on public.clients from anon, authenticated;
 revoke all on public.projects from anon, authenticated;
 revoke all on public.project_subfolders from anon, authenticated;
 revoke all on public.documents from anon, authenticated;
+revoke all on public.document_chunks from anon, authenticated;
 revoke all on public.document_versions from anon, authenticated;
 revoke all on public.document_edits from anon, authenticated;
 revoke all on public.workflows from anon, authenticated;
