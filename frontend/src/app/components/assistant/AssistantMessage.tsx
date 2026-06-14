@@ -967,6 +967,70 @@ function TimeEntrySavedBlock({
     );
 }
 
+function AgentPlanBlock({
+    steps,
+    showConnector,
+}: {
+    steps: { idx: number; type: string; tool?: string | null; intent: string }[];
+    showConnector?: boolean;
+}) {
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div className="mt-2 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">Plan</span>
+                <ol className="mt-1 ml-4 list-decimal space-y-0.5 text-gray-600">
+                    {steps.map((s) => (
+                        <li key={s.idx}>
+                            {s.intent}
+                            {s.tool ? (
+                                <span className="text-gray-400">
+                                    {" "}
+                                    · {s.tool}
+                                </span>
+                            ) : null}
+                        </li>
+                    ))}
+                </ol>
+            </div>
+        </div>
+    );
+}
+
+function AgentVerificationBlock({
+    confidence,
+    unverifiedCount,
+    notes,
+    showConnector,
+}: {
+    confidence: number;
+    unverifiedCount: number;
+    notes: string;
+    showConnector?: boolean;
+}) {
+    const pct = Math.round(confidence * 100);
+    const ok = unverifiedCount === 0;
+    return (
+        <div className="flex items-start text-sm font-serif text-gray-500 relative">
+            {showConnector && (
+                <div className="absolute bottom-0 w-[1px] bg-gray-300 top-[13px] left-[2.5px] h-[calc(100%+11px)]" />
+            )}
+            <div
+                className={`mt-2 w-1.5 h-1.5 rounded-full shrink-0 ${ok ? "bg-emerald-500" : "bg-amber-500"}`}
+            />
+            <div className="ml-2 min-w-0 flex-1 whitespace-normal break-words">
+                <span className="font-medium">
+                    Verified · {pct}% confidence
+                </span>{" "}
+                <span>{notes}</span>
+            </div>
+        </div>
+    );
+}
+
 function PartySavedBlock({
     name,
     role,
@@ -2260,6 +2324,26 @@ export function AssistantMessage({
                     key={globalIdx}
                     description={event.description}
                     minutes={event.minutes}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "agent_plan") {
+            return (
+                <AgentPlanBlock
+                    key={globalIdx}
+                    steps={event.steps}
+                    showConnector={showConnector}
+                />
+            );
+        }
+        if (event.type === "agent_verification") {
+            return (
+                <AgentVerificationBlock
+                    key={globalIdx}
+                    confidence={event.confidence}
+                    unverifiedCount={event.unverified_count}
+                    notes={event.notes}
                     showConnector={showConnector}
                 />
             );

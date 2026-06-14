@@ -4628,6 +4628,22 @@ type AssistantEvent =
   | CaseCitationEvent
   | IndiankanoonToolEvent
   | { type: "case_opinions"; cluster_id: number; case: unknown }
+  | {
+      type: "agent_plan";
+      goal: string;
+      steps: {
+        idx: number;
+        type: string;
+        tool?: string | null;
+        intent: string;
+      }[];
+    }
+  | {
+      type: "agent_verification";
+      confidence: number;
+      unverified_count: number;
+      notes: string;
+    }
   | { type: "content"; text: string }
   | { type: "error"; message: string };
 

@@ -16,6 +16,7 @@ import {
     FileText,
     Loader2,
     Pencil,
+    Sparkles,
     Trash2,
     Upload,
     X,
@@ -214,6 +215,8 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     const [ownerOnlyAction, setOwnerOnlyAction] = useState<string | null>(null);
     const [chatLoaded, setChatLoaded] = useState(false);
     const [creatingChat, setCreatingChat] = useState(false);
+    // Agent mode: opt-in plan→execute→verify loop for the next turn.
+    const [agentMode, setAgentMode] = useState(false);
     const [deletingChat, setDeletingChat] = useState(false);
 
     // Panel widths
@@ -474,15 +477,16 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleSubmit = useCallback(
         (message: Message) => {
-            if (!activeTab) return handleChat(message);
+            if (!activeTab) return handleChat(message, { agent: agentMode });
             return handleChat(message, {
+                agent: agentMode,
                 displayedDoc: {
                     filename: activeTab.filename,
                     documentId: activeTab.documentId,
                 },
             });
         },
-        [activeTab, handleChat],
+        [activeTab, handleChat, agentMode],
     );
 
     const handleDocClick = (doc: Document) => {
@@ -1232,6 +1236,21 @@ export default function ProjectAssistantChatPage({ params }: Props) {
 
                     {/* ChatInput */}
                     <div className="shrink-0 px-4 pb-4">
+                        <div className="mb-2 flex items-center justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setAgentMode((v) => !v)}
+                                title="Agent mode plans the task, executes it with tools, and verifies citations before answering."
+                                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+                                    agentMode
+                                        ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-400"
+                                }`}
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Agent mode{agentMode ? " · on" : ""}
+                            </button>
+                        </div>
                         <ChatInput
                             ref={chatInputRef}
                             onSubmit={handleSubmit}

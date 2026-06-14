@@ -26,6 +26,10 @@ import { buildTaskPromptBlock } from "../lib/projectTasks";
 import { buildClientPromptBlock } from "../lib/clients";
 import { buildMatterDetailsPromptBlock } from "../lib/projectCourt";
 import { buildHearingsPromptBlock } from "../lib/projectHearings";
+import { planTask, planToPromptBlock } from "../lib/agent/planner";
+import { summarizeVerification } from "../lib/agent/verifier";
+import { createAgentRun, finalizeAgentRun } from "../lib/agent/store";
+import type { AgentPlan } from "../lib/agent/types";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
 
 const PROJECT_SYSTEM_PROMPT_EXTRA = `PROJECT CONTEXT:
@@ -79,14 +83,22 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     const userId = res.locals.userId as string;
     const userEmail = res.locals.userEmail as string | undefined;
     const { projectId } = req.params;
-    const { messages, chat_id, model, displayed_doc, attached_documents } =
-        req.body as {
-            messages: ChatMessage[];
-            chat_id?: string;
-            model?: string;
-            displayed_doc?: { filename: string; document_id: string };
-            attached_documents?: { filename: string; document_id: string }[];
-        };
+    const {
+        messages,
+        chat_id,
+        model,
+        displayed_doc,
+        attached_documents,
+        agent: agentMode,
+    } = req.body as {
+        messages: ChatMessage[];
+        chat_id?: string;
+        model?: string;
+        displayed_doc?: { filename: string; document_id: string };
+        attached_documents?: { filename: string; document_id: string }[];
+        /** Opt-in: run the plan→execute→verify agent loop for this turn. */
+        agent?: boolean;
+    };
 
     const db = createServerSupabase();
 
@@ -214,6 +226,34 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         api_keys: apiKeys,
         legal_research_in: legalResearchIn,
     } = await getUserModelSettings(userId, db);
+
+    // Agent mode (opt-in): plan the task, persist the run, and inject the
+    // plan into the executor's prompt. Execution is the normal runLLMStream
+    // tool loop; verification runs after it completes.
+    let agentPlan: AgentPlan | null = null;
+    let agentRunId: string | null = null;
+    if (agentMode) {
+        const planModel = model || "gemini-3-flash-preview";
+        agentPlan = await planTask({
+            goal: lastUser?.content ?? "",
+            model: planModel,
+            apiKeys,
+            scopes: legalResearchIn
+                ? ["project", "global", "research"]
+                : ["project", "global"],
+        });
+        agentRunId = await createAgentRun({
+            projectId,
+            userId,
+            chatId,
+            goal: lastUser?.content ?? "",
+            plan: agentPlan,
+            model: planModel,
+            db,
+        });
+        systemPromptExtra += `\n\n${planToPromptBlock(agentPlan)}`;
+    }
+
     const apiMessages = buildMessages(
         messagesForLLM,
         docAvailability,
@@ -240,6 +280,17 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     try {
         write(`data: ${JSON.stringify({ type: "chat_id", chatId })}\n\n`);
 
+        const agentPlanEvent =
+            agentMode && agentPlan
+                ? {
+                      type: "agent_plan" as const,
+                      goal: agentPlan.goal,
+                      steps: agentPlan.steps,
+                  }
+                : null;
+        if (agentPlanEvent)
+            write(`data: ${JSON.stringify(agentPlanEvent)}\n\n`);
+
         const { events, annotations } = await runLLMStream({
             apiMessages,
             docStore,
@@ -258,7 +309,32 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
             userEmail,
         });
 
-        const persistedEvents = stripTransientAssistantEvents(events);
+        let persistedEvents = stripTransientAssistantEvents(events);
+        if (agentMode) {
+            // 1d: unverified count is 0 here; the citation guard (1e) will
+            // supply the real figure. Verification still scores confidence
+            // and surfaces a trace note.
+            const verification = summarizeVerification({
+                citationCount: annotations.length,
+                unverifiedCount: 0,
+            });
+            const verificationEvent = {
+                type: "agent_verification" as const,
+                ...verification,
+            };
+            write(`data: ${JSON.stringify(verificationEvent)}\n\n`);
+            await finalizeAgentRun({
+                runId: agentRunId,
+                verification,
+                status: "done",
+                db,
+            });
+            persistedEvents = [
+                ...(agentPlanEvent ? [agentPlanEvent] : []),
+                ...persistedEvents,
+                verificationEvent,
+            ];
+        }
         await db.from("chat_messages").insert({
             chat_id: chatId,
             role: "assistant",

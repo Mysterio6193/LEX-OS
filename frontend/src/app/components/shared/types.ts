@@ -301,6 +301,22 @@ export type AssistantEvent =
         }[];
       };
     }
+  | {
+      type: "agent_plan";
+      goal: string;
+      steps: {
+        idx: number;
+        type: string;
+        tool?: string | null;
+        intent: string;
+      }[];
+    }
+  | {
+      type: "agent_verification";
+      confidence: number;
+      unverified_count: number;
+      notes: string;
+    }
   | { type: "content"; text: string; isStreaming?: boolean };
 
 export type CaseCitationQuote = {
