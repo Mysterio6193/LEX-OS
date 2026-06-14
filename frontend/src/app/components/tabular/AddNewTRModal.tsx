@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Loader2, Upload } from "lucide-react";
-import type { Document, Project, Workflow } from "../shared/types";
+import type { Document, Project, Vault, Workflow } from "../shared/types";
 import {
     getProject,
+    getVaultDocuments,
     listProjects,
     listStandaloneDocuments,
+    listVaults,
     listWorkflows,
     uploadProjectDocument,
     uploadStandaloneDocument,
@@ -27,6 +29,8 @@ interface Props {
     projects?: Project[];
     /** When provided, skip the project/directory picker and show only these docs */
     projectDocs?: Document[];
+    /** The matter id (project mode) — enables the "From Vault" shortcut. */
+    projectId?: string;
     projectName?: string;
     projectCmNumber?: string | null;
 }
@@ -37,6 +41,7 @@ export function AddNewTRModal({
     onAdd,
     projects = [],
     projectDocs: fixedProjectDocs,
+    projectId: fixedProjectId,
     projectName,
     projectCmNumber,
 }: Props) {
@@ -60,6 +65,38 @@ export function AddNewTRModal({
     const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(
         new Set(),
     );
+    // "From Vault" shortcut: vaults of the active matter (project mode, or a
+    // project chosen in the directory flow).
+    const [vaults, setVaults] = useState<Vault[]>([]);
+    const vaultProjectId = isProjectMode ? fixedProjectId : selectedProjectId;
+
+    useEffect(() => {
+        if (!open || !vaultProjectId) {
+            setVaults([]);
+            return;
+        }
+        let cancelled = false;
+        listVaults(vaultProjectId)
+            .then((v) => {
+                if (!cancelled) setVaults(v);
+            })
+            .catch(() => {
+                if (!cancelled) setVaults([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, vaultProjectId]);
+
+    async function applyVault(vaultId: string) {
+        if (!vaultProjectId || !vaultId) return;
+        try {
+            const ids = await getVaultDocuments(vaultProjectId, vaultId);
+            setSelectedDocIds(new Set(ids));
+        } catch {
+            /* ignore */
+        }
+    }
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -449,9 +486,33 @@ export function AddNewTRModal({
                         {/* File directory */}
                         {showDirectory && (
                             <div className="space-y-2">
-                                <p className="text-xs font-medium text-gray-700">
-                                    Select Documents
-                                </p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-medium text-gray-700">
+                                        Select Documents
+                                    </p>
+                                    {vaults.length > 0 && (
+                                        <select
+                                            defaultValue=""
+                                            onChange={(e) => {
+                                                if (e.target.value)
+                                                    void applyVault(
+                                                        e.target.value,
+                                                    );
+                                            }}
+                                            title="Select all documents in a Vault"
+                                            className="h-7 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-600 outline-none focus:border-gray-400"
+                                        >
+                                            <option value="">
+                                                From a Vault…
+                                            </option>
+                                            {vaults.map((v) => (
+                                                <option key={v.id} value={v.id}>
+                                                    {v.name} ({v.document_count})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
                                 <div>
                                     <FileDirectory
                                         standaloneDocs={

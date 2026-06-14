@@ -3664,6 +3664,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                 open={newTRModalOpen}
                 onClose={() => setNewTRModalOpen(false)}
                 onAdd={handleCreateReview}
+                projectId={projectId}
                 projectDocs={project?.documents?.filter(
                     (d) => d.status === "ready",
                 )}
