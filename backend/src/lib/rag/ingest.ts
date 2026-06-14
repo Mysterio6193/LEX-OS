@@ -21,6 +21,43 @@ type Db = ReturnType<typeof createServerSupabase>;
 
 const INSERT_BATCH = 200;
 
+/** Best-effort plain-text extraction of a document's current version. */
+export async function getDocumentPlainText(
+  documentId: string,
+  db: Db,
+): Promise<string | null> {
+  const { data: doc } = await db
+    .from("documents")
+    .select("current_version_id")
+    .eq("id", documentId)
+    .single();
+  const versionId = (doc as { current_version_id: string | null } | null)
+    ?.current_version_id;
+  if (!versionId) return null;
+  const { data: ver } = await db
+    .from("document_versions")
+    .select("storage_path, file_type")
+    .eq("id", versionId)
+    .single();
+  const version = ver as {
+    storage_path: string | null;
+    file_type: string | null;
+  } | null;
+  if (!version?.storage_path) return null;
+  const buf = await downloadFile(version.storage_path);
+  if (!buf) return null;
+  const isPdf =
+    (version.file_type ?? "").toLowerCase().includes("pdf") ||
+    version.storage_path.toLowerCase().endsWith(".pdf");
+  try {
+    return isPdf
+      ? await extractPdfText(buf)
+      : await extractDocxBodyText(Buffer.from(buf));
+  } catch {
+    return null;
+  }
+}
+
 export async function ingestDocumentText(args: {
   documentId: string;
   projectId: string | null;
