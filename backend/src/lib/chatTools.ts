@@ -43,6 +43,8 @@ import { saveProjectDeadline } from "./projectDeadlines";
 import { saveProjectHearing } from "./projectHearings";
 import { saveTimeEntry } from "./billing";
 import { computeLimitation, listLimitationKeys } from "./limitation";
+import { hybridRetrieve } from "./rag/retrieve";
+import { listAccessibleProjectIds } from "./access";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
@@ -468,6 +470,33 @@ export const PROJECT_EXTRA_TOOLS = [
           },
         },
         required: ["limitation_key", "trigger_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "retrieve_context",
+      description:
+        "Semantically search across this matter's documents (and, by default, the firm's other accessible matters) for passages relevant to a question, using hybrid semantic + keyword retrieval. Returns the most relevant chunks with their document_id and page/section so you can read and cite them. Use this to locate where something is discussed across large or numerous documents before answering; then cite the specific document and page. Set this_matter_only to restrict to the current matter.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "What to search for.",
+          },
+          limit: {
+            type: "integer",
+            description: "Maximum passages to return (default 8).",
+          },
+          this_matter_only: {
+            type: "boolean",
+            description:
+              "If true, restrict the search to the current matter's documents.",
+          },
+        },
+        required: ["query"],
       },
     },
   },
@@ -3148,6 +3177,49 @@ export async function runToolCalls(
           role: "tool",
           tool_call_id: tc.id,
           content: JSON.stringify(result),
+        });
+      }
+    } else if (tc.function.name === "retrieve_context") {
+      const query = String(args.query ?? "").trim();
+      if (!query) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({ ok: false, error: "Provide a query." }),
+        });
+      } else {
+        const limit =
+          typeof args.limit === "number" ? args.limit : undefined;
+        let projectIds: string[];
+        if (args.this_matter_only && projectId) {
+          projectIds = [projectId];
+        } else {
+          projectIds = await listAccessibleProjectIds(userId, userEmail, db);
+          if (projectId && !projectIds.includes(projectId))
+            projectIds.push(projectId);
+        }
+        const hits = await hybridRetrieve({
+          query,
+          projectIds,
+          db,
+          apiKeys,
+          limit,
+        });
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: true,
+            query,
+            note: "Hybrid retrieval over indexed matter documents. Read the cited document/page to quote precisely before citing.",
+            hits: hits.map((h) => ({
+              document_id: h.document_id,
+              page: h.page,
+              section_no: h.section_no,
+              para_no: h.para_no,
+              text: h.text,
+            })),
+          }),
         });
       }
     } else if (tc.function.name === "read_table_cells" && tabularStore) {
