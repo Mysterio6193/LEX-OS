@@ -152,6 +152,13 @@ check("guard: too-short quote rejected", !quoteAppears("yes", "yes it is so"));
     check("workflow: goal carries workflow name", plan.goal.includes(wf.name));
   }
   check("workflow: unknown id resolves undefined", !getAgentWorkflow("nope"));
+  const research = getAgentWorkflow("wf-deep-research");
+  check("workflow: deep-research exists", !!research);
+  if (research)
+    check(
+      "workflow: deep-research ends in a drafted memo",
+      research.steps[research.steps.length - 1].tool === "generate_docx",
+    );
 }
 
 // --- Agent Builder step normalization ---
