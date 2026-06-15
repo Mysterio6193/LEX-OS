@@ -4596,6 +4596,15 @@ const mockApi = {
                 step_count: 5,
                 steps: [],
             },
+            {
+                id: "wf-deep-research",
+                name: "Deep Research memo",
+                description:
+                    "Multi-step research into a structured, citation-guarded memo (Issue → Rule → Authorities → Application → Conclusion).",
+                practice: "Research",
+                step_count: 6,
+                steps: [],
+            },
             ...getLocalStorage<AgentWorkflow[]>("lexos_agent_workflows", []),
         ];
     },

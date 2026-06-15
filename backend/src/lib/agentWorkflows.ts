@@ -111,6 +111,21 @@ export const AGENT_WORKFLOWS: AgentWorkflow[] = [
       { intent: "Add negotiation follow-ups to the checklist", tool: "save_task" },
     ],
   },
+  {
+    id: "wf-deep-research",
+    name: "Deep Research memo",
+    description:
+      "Multi-step legal research into a structured, citation-guarded memo: issue → rule → authorities (with treatment) → application → conclusion.",
+    practice: "Research",
+    steps: [
+      { intent: "Frame the precise legal issue(s) and jurisdiction from the request and matter context", tool: null },
+      { intent: "Search Indian case law for the leading and most relevant authorities", tool: "indiankanoon_search_case_law" },
+      { intent: "Verify the citations resolve to real judgments", tool: "indiankanoon_verify_citations" },
+      { intent: "Read the leading authorities to extract verbatim holdings before citing", tool: "indiankanoon_read_case" },
+      { intent: "Search the firm's own matters and precedents for prior treatment of the issue", tool: "search_firm_knowledge" },
+      { intent: "Synthesise a structured research memo (Issue → Rule → Authorities with treatment → Application → Conclusion) with verified citations and a coverage-limits note", tool: "generate_docx" },
+    ],
+  },
 ];
 
 export function getAgentWorkflow(id: string): AgentWorkflow | undefined {
