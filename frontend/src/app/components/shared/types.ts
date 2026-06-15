@@ -625,8 +625,17 @@ export interface AgentWorkflow {
   name: string;
   description: string;
   practice: string;
-  step_count: number;
+  step_count?: number;
   steps: AgentWorkflowStep[];
+  is_custom?: boolean;
+  is_shared?: boolean;
+}
+
+export interface AgentWorkflowToolOption {
+  name: string;
+  scope: string;
+  accuracy_critical: boolean;
+  description: string;
 }
 
 // Matter Vault (document sets)

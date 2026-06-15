@@ -43,6 +43,7 @@ import type { ChatInputHandle } from "@/app/components/assistant/ChatInput";
 import { ProjectExplorer } from "@/app/components/projects/ProjectExplorer";
 import { DocView } from "@/app/components/shared/DocView";
 import { OwnerOnlyModal } from "@/app/components/shared/OwnerOnlyModal";
+import { AgentWorkflowBuilderModal } from "@/app/components/projects/AgentWorkflowBuilderModal";
 import { DocxView } from "@/app/components/shared/DocxView";
 import { MikeIcon } from "@/components/chat/mike-icon";
 import { useAuth } from "@/contexts/AuthContext";
@@ -220,6 +221,13 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     // Agent mode: opt-in plan→execute→verify loop for the next turn.
     const [agentMode, setAgentMode] = useState(false);
     const [agentWorkflows, setAgentWorkflows] = useState<AgentWorkflow[]>([]);
+    const [builderOpen, setBuilderOpen] = useState(false);
+
+    const reloadWorkflows = useCallback(() => {
+        listAgentWorkflows()
+            .then(setAgentWorkflows)
+            .catch(() => setAgentWorkflows([]));
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -1288,6 +1296,15 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                             )}
                             <button
                                 type="button"
+                                onClick={() => setBuilderOpen(true)}
+                                title="Build / manage agent workflows"
+                                className="inline-flex h-7 items-center gap-1 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-500 hover:border-gray-400"
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Workflows
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => setAgentMode((v) => !v)}
                                 title="Agent mode plans the task, executes it with tools, and verifies citations before answering."
                                 className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
@@ -1316,6 +1333,11 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                 open={!!ownerOnlyAction}
                 action={ownerOnlyAction ?? undefined}
                 onClose={() => setOwnerOnlyAction(null)}
+            />
+            <AgentWorkflowBuilderModal
+                open={builderOpen}
+                onClose={() => setBuilderOpen(false)}
+                onChanged={reloadWorkflows}
             />
         </div>
     );

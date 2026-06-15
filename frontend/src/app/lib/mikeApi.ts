@@ -25,6 +25,8 @@ import type {
     InvoiceLineItem,
     Vault,
     AgentWorkflow,
+    AgentWorkflowStep,
+    AgentWorkflowToolOption,
     MatterTemplate,
     ProjectParty,
     ProjectTask,
@@ -816,6 +818,51 @@ export async function reindexVault(
 export async function listAgentWorkflows(): Promise<AgentWorkflow[]> {
     if (isDemoMode) return mockApi.listAgentWorkflows();
     return apiRequest<AgentWorkflow[]>(`/agent-workflows`);
+}
+
+export async function listAgentWorkflowTools(): Promise<
+    AgentWorkflowToolOption[]
+> {
+    if (isDemoMode) return mockApi.listAgentWorkflowTools();
+    return apiRequest<AgentWorkflowToolOption[]>(`/agent-workflows/tools`);
+}
+
+export async function createAgentWorkflow(body: {
+    name: string;
+    description?: string;
+    practice?: string;
+    steps: AgentWorkflowStep[];
+    is_shared?: boolean;
+}): Promise<AgentWorkflow> {
+    if (isDemoMode) return mockApi.createAgentWorkflow(body);
+    return apiRequest<AgentWorkflow>(`/agent-workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateAgentWorkflow(
+    id: string,
+    body: {
+        name?: string;
+        description?: string | null;
+        practice?: string | null;
+        steps?: AgentWorkflowStep[];
+        is_shared?: boolean;
+    },
+): Promise<AgentWorkflow> {
+    if (isDemoMode) return mockApi.updateAgentWorkflow(id, body);
+    return apiRequest<AgentWorkflow>(`/agent-workflows/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function deleteAgentWorkflow(id: string): Promise<void> {
+    if (isDemoMode) return mockApi.deleteAgentWorkflow(id);
+    await apiRequest(`/agent-workflows/${id}`, { method: "DELETE" });
 }
 
 export async function listProjectParties(
@@ -4549,6 +4596,98 @@ const mockApi = {
                 step_count: 5,
                 steps: [],
             },
+            ...getLocalStorage<AgentWorkflow[]>("lexos_agent_workflows", []),
         ];
+    },
+
+    listAgentWorkflowTools: async (): Promise<AgentWorkflowToolOption[]> => {
+        await delay(30);
+        return [
+            { name: "retrieve_context", scope: "project", accuracy_critical: false, description: "Search matter documents." },
+            { name: "check_conflicts", scope: "project", accuracy_critical: true, description: "Conflict check across matters." },
+            { name: "compute_limitation", scope: "project", accuracy_critical: true, description: "Compute Indian limitation dates." },
+            { name: "save_deadline", scope: "project", accuracy_critical: false, description: "Save a deadline." },
+            { name: "save_task", scope: "project", accuracy_critical: false, description: "Add a checklist task." },
+            { name: "save_party", scope: "project", accuracy_critical: false, description: "Record a party." },
+            { name: "generate_docx", scope: "global", accuracy_critical: false, description: "Draft a document." },
+            { name: "indiankanoon_search_case_law", scope: "research", accuracy_critical: true, description: "Search Indian case law." },
+            { name: "search_firm_knowledge", scope: "project", accuracy_critical: false, description: "Search across all matters." },
+        ];
+    },
+
+    createAgentWorkflow: async (body: {
+        name: string;
+        description?: string;
+        practice?: string;
+        steps: AgentWorkflowStep[];
+        is_shared?: boolean;
+    }): Promise<AgentWorkflow> => {
+        await delay(100);
+        const list = getLocalStorage<AgentWorkflow[]>(
+            "lexos_agent_workflows",
+            [],
+        );
+        const wf: AgentWorkflow = {
+            id: `wf-custom-${Date.now()}`,
+            name: body.name,
+            description: body.description || "",
+            practice: body.practice || "Custom",
+            step_count: body.steps.length,
+            steps: body.steps,
+            is_custom: true,
+            is_shared: !!body.is_shared,
+        };
+        list.push(wf);
+        setLocalStorage("lexos_agent_workflows", list);
+        return wf;
+    },
+
+    updateAgentWorkflow: async (
+        id: string,
+        body: {
+            name?: string;
+            description?: string | null;
+            practice?: string | null;
+            steps?: AgentWorkflowStep[];
+            is_shared?: boolean;
+        },
+    ): Promise<AgentWorkflow> => {
+        await delay(100);
+        const list = getLocalStorage<AgentWorkflow[]>(
+            "lexos_agent_workflows",
+            [],
+        );
+        const idx = list.findIndex((w) => w.id === id);
+        if (idx === -1) throw new Error("Workflow not found");
+        list[idx] = {
+            ...list[idx],
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.description !== undefined
+                ? { description: body.description || "" }
+                : {}),
+            ...(body.practice !== undefined
+                ? { practice: body.practice || "Custom" }
+                : {}),
+            ...(body.steps !== undefined
+                ? { steps: body.steps, step_count: body.steps.length }
+                : {}),
+            ...(body.is_shared !== undefined
+                ? { is_shared: body.is_shared }
+                : {}),
+        };
+        setLocalStorage("lexos_agent_workflows", list);
+        return list[idx];
+    },
+
+    deleteAgentWorkflow: async (id: string): Promise<void> => {
+        await delay(100);
+        const list = getLocalStorage<AgentWorkflow[]>(
+            "lexos_agent_workflows",
+            [],
+        );
+        setLocalStorage(
+            "lexos_agent_workflows",
+            list.filter((w) => w.id !== id),
+        );
     }
 };
