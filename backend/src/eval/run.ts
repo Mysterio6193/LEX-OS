@@ -18,6 +18,8 @@ import {
   verifyCellCitations,
 } from "../lib/tabularCitations";
 import { formatLog, shouldLog } from "../lib/logger";
+import { planFromWorkflow } from "../lib/agent/planner";
+import { getAgentWorkflow } from "../lib/agentWorkflows";
 
 let passed = 0;
 let failed = 0;
@@ -132,6 +134,23 @@ check("guard: too-short quote rejected", !quoteAppears("yes", "yes it is so"));
     "logger: circular meta falls back",
     typeof formatLog("error", "x", circ) === "string",
   );
+}
+
+// --- Agent workflows → deterministic plan ---
+{
+  const wf = getAgentWorkflow("wf-s138-kit");
+  check("workflow: S.138 kit exists", !!wf);
+  if (wf) {
+    const plan = planFromWorkflow(wf, "for the Sharma matter");
+    eq("workflow: plan step count matches", plan.steps.length, wf.steps.length);
+    eq("workflow: step indices sequential", plan.steps[0].idx, 0);
+    check(
+      "workflow: tool steps preserved",
+      plan.steps[0].tool === wf.steps[0].tool,
+    );
+    check("workflow: goal carries workflow name", plan.goal.includes(wf.name));
+  }
+  check("workflow: unknown id resolves undefined", !getAgentWorkflow("nope"));
 }
 
 console.log(`\neval: ${passed} passed, ${failed} failed`);

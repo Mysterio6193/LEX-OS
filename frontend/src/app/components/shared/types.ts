@@ -613,6 +613,22 @@ export interface BillingSettings {
   default_hourly_rate: number | null;
 }
 
+// Agent workflows (codified legal playbooks)
+
+export interface AgentWorkflowStep {
+  intent: string;
+  tool?: string | null;
+}
+
+export interface AgentWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  practice: string;
+  step_count: number;
+  steps: AgentWorkflowStep[];
+}
+
 // Matter Vault (document sets)
 
 export interface Vault {

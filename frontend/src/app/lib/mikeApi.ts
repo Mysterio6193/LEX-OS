@@ -24,6 +24,7 @@ import type {
     Invoice,
     InvoiceLineItem,
     Vault,
+    AgentWorkflow,
     MatterTemplate,
     ProjectParty,
     ProjectTask,
@@ -812,6 +813,11 @@ export async function reindexVault(
     });
 }
 
+export async function listAgentWorkflows(): Promise<AgentWorkflow[]> {
+    if (isDemoMode) return mockApi.listAgentWorkflows();
+    return apiRequest<AgentWorkflow[]>(`/agent-workflows`);
+}
+
 export async function listProjectParties(
     projectId: string,
 ): Promise<ProjectParty[]> {
@@ -1384,6 +1390,7 @@ export async function streamProjectChat(payload: {
     displayed_doc?: { filename: string; document_id: string };
     attached_documents?: { filename: string; document_id: string }[];
     agent?: boolean;
+    agent_workflow_id?: string;
     signal?: AbortSignal;
 }): Promise<Response> {
     if (isDemoMode) return mockApi.streamProjectChat(payload);
@@ -4501,5 +4508,47 @@ const mockApi = {
         );
         const n = (members[vaultId] ?? []).length;
         return { documents: n, indexed: n, chunks: n * 12 };
+    },
+
+    listAgentWorkflows: async (): Promise<AgentWorkflow[]> => {
+        await delay(50);
+        return [
+            {
+                id: "wf-s138-kit",
+                name: "Cheque Dishonour (S.138 NI Act) kit",
+                description:
+                    "Conflicts, parties, limitation, notice, and complaint draft for a S.138 matter.",
+                practice: "Criminal / NI Act",
+                step_count: 7,
+                steps: [],
+            },
+            {
+                id: "wf-bail-bnss",
+                name: "Bail Application (BNSS) kit",
+                description:
+                    "Conflicts, FIR facts, precedents, draft, and next hearing for a bail matter.",
+                practice: "Criminal",
+                step_count: 6,
+                steps: [],
+            },
+            {
+                id: "wf-writ-226",
+                name: "Writ Petition (Art. 226/32)",
+                description:
+                    "Conflicts, right infringed and alternate-remedy check, precedents, petition + synopsis.",
+                practice: "Constitutional",
+                step_count: 5,
+                steps: [],
+            },
+            {
+                id: "wf-contract-diligence",
+                name: "Contract review / diligence",
+                description:
+                    "Extract key clauses, compare to firm precedents, flag risks, draft a note.",
+                practice: "Transactional",
+                step_count: 5,
+                steps: [],
+            },
+        ];
     }
 };

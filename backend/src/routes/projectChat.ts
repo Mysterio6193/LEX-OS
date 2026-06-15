@@ -26,7 +26,12 @@ import { buildTaskPromptBlock } from "../lib/projectTasks";
 import { buildClientPromptBlock } from "../lib/clients";
 import { buildMatterDetailsPromptBlock } from "../lib/projectCourt";
 import { buildHearingsPromptBlock } from "../lib/projectHearings";
-import { planTask, planToPromptBlock } from "../lib/agent/planner";
+import {
+    planTask,
+    planToPromptBlock,
+    planFromWorkflow,
+} from "../lib/agent/planner";
+import { getAgentWorkflow } from "../lib/agentWorkflows";
 import { summarizeVerification } from "../lib/agent/verifier";
 import { createAgentRun, finalizeAgentRun } from "../lib/agent/store";
 import type { AgentPlan } from "../lib/agent/types";
@@ -99,6 +104,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         displayed_doc,
         attached_documents,
         agent: agentMode,
+        agent_workflow_id: agentWorkflowId,
     } = req.body as {
         messages: ChatMessage[];
         chat_id?: string;
@@ -107,6 +113,8 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         attached_documents?: { filename: string; document_id: string }[];
         /** Opt-in: run the plan→execute→verify agent loop for this turn. */
         agent?: boolean;
+        /** Optional: seed the agent plan from a library workflow. */
+        agent_workflow_id?: string;
     };
 
     const db = createServerSupabase();
@@ -243,19 +251,27 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
     let agentRunId: string | null = null;
     if (agentMode) {
         const planModel = model || "gemini-3-flash-preview";
-        agentPlan = await planTask({
-            goal: lastUser?.content ?? "",
-            model: planModel,
-            apiKeys,
-            scopes: legalResearchIn
-                ? ["project", "global", "research"]
-                : ["project", "global"],
-        });
+        const goal = lastUser?.content ?? "";
+        // A selected library workflow seeds the plan deterministically;
+        // otherwise the planner decomposes the goal with one model call.
+        const workflow = agentWorkflowId
+            ? getAgentWorkflow(agentWorkflowId)
+            : undefined;
+        agentPlan = workflow
+            ? planFromWorkflow(workflow, goal)
+            : await planTask({
+                  goal,
+                  model: planModel,
+                  apiKeys,
+                  scopes: legalResearchIn
+                      ? ["project", "global", "research"]
+                      : ["project", "global"],
+              });
         agentRunId = await createAgentRun({
             projectId,
             userId,
             chatId,
-            goal: lastUser?.content ?? "",
+            goal: agentPlan.goal,
             plan: agentPlan,
             model: planModel,
             db,

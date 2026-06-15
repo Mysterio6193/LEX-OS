@@ -32,6 +32,7 @@ import {
     deleteProjectFolder,
     moveDocumentToFolder,
     moveSubfolderToFolder,
+    listAgentWorkflows,
 } from "@/app/lib/mikeApi";
 import { useAssistantChat } from "@/app/hooks/useAssistantChat";
 import { useChatHistoryContext } from "@/app/contexts/ChatHistoryContext";
@@ -50,6 +51,7 @@ import { useSidebar } from "@/app/contexts/SidebarContext";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { HeaderActionsMenu } from "@/app/components/shared/HeaderActionsMenu";
 import type {
+    AgentWorkflow,
     CitationQuote,
     CitationAnnotation,
     Document,
@@ -217,6 +219,21 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     const [creatingChat, setCreatingChat] = useState(false);
     // Agent mode: opt-in plan→execute→verify loop for the next turn.
     const [agentMode, setAgentMode] = useState(false);
+    const [agentWorkflows, setAgentWorkflows] = useState<AgentWorkflow[]>([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        listAgentWorkflows()
+            .then((w) => {
+                if (!cancelled) setAgentWorkflows(w);
+            })
+            .catch(() => {
+                if (!cancelled) setAgentWorkflows([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
     const [deletingChat, setDeletingChat] = useState(false);
 
     // Panel widths
@@ -1236,7 +1253,39 @@ export default function ProjectAssistantChatPage({ params }: Props) {
 
                     {/* ChatInput */}
                     <div className="shrink-0 px-4 pb-4">
-                        <div className="mb-2 flex items-center justify-end">
+                        <div className="mb-2 flex items-center justify-end gap-2">
+                            {agentWorkflows.length > 0 && (
+                                <select
+                                    value=""
+                                    disabled={isResponseLoading}
+                                    onChange={(e) => {
+                                        const wf = agentWorkflows.find(
+                                            (w) => w.id === e.target.value,
+                                        );
+                                        if (!wf) return;
+                                        setAgentMode(true);
+                                        void handleChat(
+                                            {
+                                                role: "user",
+                                                content: `Run the "${wf.name}" workflow for this matter.`,
+                                            },
+                                            {
+                                                agent: true,
+                                                agentWorkflowId: wf.id,
+                                            },
+                                        );
+                                    }}
+                                    title="Run a codified agent workflow (plans deterministically and executes with tools)."
+                                    className="h-7 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 outline-none hover:border-gray-400"
+                                >
+                                    <option value="">Run workflow…</option>
+                                    {agentWorkflows.map((w) => (
+                                        <option key={w.id} value={w.id}>
+                                            {w.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setAgentMode((v) => !v)}

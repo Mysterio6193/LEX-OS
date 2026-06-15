@@ -79,3 +79,23 @@ export function planToPromptBlock(plan: AgentPlan): string {
   return `EXECUTION PLAN (you proposed this; follow it, adapting as needed, and use the named tools):
 ${lines.join("\n")}`;
 }
+
+/**
+ * Build a deterministic plan from a library agent-workflow — no LLM call, so
+ * a firm's repeatable matters execute the same vetted steps every time.
+ */
+export function planFromWorkflow(
+  workflow: { name: string; steps: { intent: string; tool?: string | null }[] },
+  goal: string,
+): AgentPlan {
+  return {
+    goal: `${workflow.name}: ${goal}`.trim(),
+    steps: workflow.steps.map((s, idx) => ({
+      idx,
+      type: s.tool ? "tool" : "reason",
+      tool: s.tool ?? null,
+      intent: s.intent,
+    })),
+  };
+}
+

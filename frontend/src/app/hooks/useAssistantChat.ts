@@ -284,6 +284,8 @@ export function useAssistantChat({
       displayedDoc?: { filename: string; documentId: string } | null;
       /** Opt-in: run the plan→execute→verify agent loop for this turn. */
       agent?: boolean;
+      /** Optional: seed the agent plan from a library workflow. */
+      agentWorkflowId?: string;
     },
   ): Promise<string | null> => {
     if (!message.content.trim()) return null;
@@ -351,6 +353,7 @@ export function useAssistantChat({
             attached_documents:
               attachedDocs.length > 0 ? attachedDocs : undefined,
             agent: opts?.agent ? true : undefined,
+            agent_workflow_id: opts?.agentWorkflowId,
             signal: controller.signal,
           })
         : streamChat({
