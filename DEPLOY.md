@@ -41,14 +41,35 @@ container orchestrator at it. The process handles `SIGTERM`/`SIGINT` for
 graceful shutdown and serverless platforms via `export default app`
 (`VERCEL=1` skips `app.listen`).
 
-## 4. Frontend
-Set `frontend/.env.local` (Supabase public keys, `NEXT_PUBLIC_API_BASE_URL`
-pointing at the backend). Then either:
-- **Vercel:** deploy the `frontend/` app (a `vercel.json` is present), or
-- **Self-host:** `cd frontend && npm ci && npm run build && npm start`.
+## 4. Frontend (Vercel)
+The frontend is a Next.js app in `frontend/`; the backend is hosted
+separately (§3) and reached via `NEXT_PUBLIC_API_BASE_URL`.
 
+**Vercel — two equivalent options:**
+- **Simplest:** import the repo as-is. The root `vercel.json` installs and
+  builds from `frontend/` and serves `frontend/.next` — no dashboard change
+  needed. (Note: the root `vercel.json` must NOT use `experimentalServices`;
+  that is not a real Vercel schema and was the cause of failed deploys.)
+- **Cleaner:** in the Vercel project settings set **Root Directory =
+  `frontend`** (then the root `vercel.json` is unused and Vercel auto-detects
+  Next.js).
+
+**Required env vars (Vercel project → Settings → Environment Variables):**
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=...
+NEXT_PUBLIC_API_BASE_URL=https://<your-backend-host>
+# Optional: ship a backend-free trial build
+NEXT_PUBLIC_DEMO_MODE=false
+```
 Demo Mode (`NEXT_PUBLIC_DEMO_MODE=true`) runs fully client-side with no
 backend — useful for trials, not production.
+
+`frontend/package.json` also carries Cloudflare (`opennextjs-cloudflare`)
+scripts and an `open-next.config.ts`; those are unused by Vercel and can be
+ignored (or deleted if you commit to Vercel).
+
+**Self-host instead:** `cd frontend && npm ci && npm run build && npm start`.
 
 ## 5. Post-deploy checks
 - `GET /health` returns ok.
