@@ -286,6 +286,8 @@ export function useAssistantChat({
       agent?: boolean;
       /** Optional: seed the agent plan from a library workflow. */
       agentWorkflowId?: string;
+      /** Optional: respond / draft in this language for this turn. */
+      language?: string;
     },
   ): Promise<string | null> => {
     if (!message.content.trim()) return null;
@@ -354,6 +356,7 @@ export function useAssistantChat({
               attachedDocs.length > 0 ? attachedDocs : undefined,
             agent: opts?.agent ? true : undefined,
             agent_workflow_id: opts?.agentWorkflowId,
+            language: opts?.language,
             signal: controller.signal,
           })
         : streamChat({
