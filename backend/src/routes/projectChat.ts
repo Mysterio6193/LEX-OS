@@ -31,7 +31,7 @@ import {
     planToPromptBlock,
     planFromWorkflow,
 } from "../lib/agent/planner";
-import { getAgentWorkflow } from "../lib/agentWorkflows";
+import { resolveAgentWorkflow } from "../lib/customAgentWorkflows";
 import { summarizeVerification } from "../lib/agent/verifier";
 import { createAgentRun, finalizeAgentRun } from "../lib/agent/store";
 import type { AgentPlan } from "../lib/agent/types";
@@ -255,7 +255,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         // A selected library workflow seeds the plan deterministically;
         // otherwise the planner decomposes the goal with one model call.
         const workflow = agentWorkflowId
-            ? getAgentWorkflow(agentWorkflowId)
+            ? await resolveAgentWorkflow(agentWorkflowId, userId, db)
             : undefined;
         agentPlan = workflow
             ? planFromWorkflow(workflow, goal)

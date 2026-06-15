@@ -798,8 +798,25 @@ language sql stable as $$
   limit match_count;
 $$;
 
+-- Agent Builder: user-defined agent workflows (playbooks).
+create table if not exists public.agent_workflows (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  name text not null,
+  description text,
+  practice text,
+  steps jsonb not null default '[]'::jsonb,
+  is_shared boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_agent_workflows_user
+  on public.agent_workflows(user_id);
+
 revoke all on public.vaults from anon, authenticated;
 revoke all on public.vault_documents from anon, authenticated;
+revoke all on public.agent_workflows from anon, authenticated;
 revoke all on function public.match_chunks_in_documents(vector, uuid[], int)
   from anon, authenticated;
 

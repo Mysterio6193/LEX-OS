@@ -180,6 +180,7 @@ export async function buildUserAccountExport(
         tabularReviews,
         sharedProjects,
         sharedTabularReviews,
+        agentWorkflows,
     ] = await Promise.all([
         selectAll(db, "user_profiles", (query) => query.eq("user_id", userId)),
         loadApiKeyStatus(db, userId),
@@ -236,6 +237,9 @@ export async function buildUserAccountExport(
                   "id, user_id, project_id, title, practice, created_at, updated_at",
               )
             : Promise.resolve([]),
+        selectAll(db, "agent_workflows", (query) =>
+            query.eq("user_id", userId).order("created_at", { ascending: true }),
+        ),
     ]);
 
     const projectIds = idsFrom(projects);
@@ -294,6 +298,7 @@ export async function buildUserAccountExport(
         document_versions: versions,
         document_edits: edits,
         workflows,
+        agent_workflows: agentWorkflows,
         hidden_workflows: hiddenWorkflows,
         workflow_shares_by_user: workflowSharesByUser,
         workflow_shares_with_user: workflowSharesWithUser,

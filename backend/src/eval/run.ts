@@ -20,6 +20,7 @@ import {
 import { formatLog, shouldLog } from "../lib/logger";
 import { planFromWorkflow } from "../lib/agent/planner";
 import { getAgentWorkflow } from "../lib/agentWorkflows";
+import { normalizeSteps } from "../lib/customAgentWorkflows";
 
 let passed = 0;
 let failed = 0;
@@ -151,6 +152,22 @@ check("guard: too-short quote rejected", !quoteAppears("yes", "yes it is so"));
     check("workflow: goal carries workflow name", plan.goal.includes(wf.name));
   }
   check("workflow: unknown id resolves undefined", !getAgentWorkflow("nope"));
+}
+
+// --- Agent Builder step normalization ---
+{
+  const steps = normalizeSteps([
+    { intent: "  Find the liability clause  ", tool: "retrieve_context" },
+    { intent: "Guess at it", tool: "not_a_real_tool" },
+    { intent: "", tool: "save_task" },
+    { intent: "Summarise" },
+  ]);
+  eq("builder: drops empty-intent step", steps.length, 3);
+  eq("builder: trims intent", steps[0].intent, "Find the liability clause");
+  check("builder: keeps valid tool", steps[0].tool === "retrieve_context");
+  check("builder: nulls unknown tool", steps[1].tool === null);
+  check("builder: missing tool → null", steps[2].tool === null);
+  check("builder: non-array → empty", normalizeSteps("nope").length === 0);
 }
 
 console.log(`\neval: ${passed} passed, ${failed} failed`);
