@@ -16,6 +16,7 @@ import {
     FileText,
     Loader2,
     Pencil,
+    Sparkles,
     Trash2,
     Upload,
     X,
@@ -31,6 +32,7 @@ import {
     deleteProjectFolder,
     moveDocumentToFolder,
     moveSubfolderToFolder,
+    listAgentWorkflows,
 } from "@/app/lib/mikeApi";
 import { useAssistantChat } from "@/app/hooks/useAssistantChat";
 import { useChatHistoryContext } from "@/app/contexts/ChatHistoryContext";
@@ -41,6 +43,7 @@ import type { ChatInputHandle } from "@/app/components/assistant/ChatInput";
 import { ProjectExplorer } from "@/app/components/projects/ProjectExplorer";
 import { DocView } from "@/app/components/shared/DocView";
 import { OwnerOnlyModal } from "@/app/components/shared/OwnerOnlyModal";
+import { AgentWorkflowBuilderModal } from "@/app/components/projects/AgentWorkflowBuilderModal";
 import { DocxView } from "@/app/components/shared/DocxView";
 import { MikeIcon } from "@/components/chat/mike-icon";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +52,7 @@ import { useSidebar } from "@/app/contexts/SidebarContext";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { HeaderActionsMenu } from "@/app/components/shared/HeaderActionsMenu";
 import type {
+    AgentWorkflow,
     CitationQuote,
     CitationAnnotation,
     Document,
@@ -214,6 +218,30 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     const [ownerOnlyAction, setOwnerOnlyAction] = useState<string | null>(null);
     const [chatLoaded, setChatLoaded] = useState(false);
     const [creatingChat, setCreatingChat] = useState(false);
+    // Agent mode: opt-in plan→execute→verify loop for the next turn.
+    const [agentMode, setAgentMode] = useState(false);
+    const [agentWorkflows, setAgentWorkflows] = useState<AgentWorkflow[]>([]);
+    const [builderOpen, setBuilderOpen] = useState(false);
+
+    const reloadWorkflows = useCallback(() => {
+        listAgentWorkflows()
+            .then(setAgentWorkflows)
+            .catch(() => setAgentWorkflows([]));
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        listAgentWorkflows()
+            .then((w) => {
+                if (!cancelled) setAgentWorkflows(w);
+            })
+            .catch(() => {
+                if (!cancelled) setAgentWorkflows([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
     const [deletingChat, setDeletingChat] = useState(false);
 
     // Panel widths
@@ -474,15 +502,16 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleSubmit = useCallback(
         (message: Message) => {
-            if (!activeTab) return handleChat(message);
+            if (!activeTab) return handleChat(message, { agent: agentMode });
             return handleChat(message, {
+                agent: agentMode,
                 displayedDoc: {
                     filename: activeTab.filename,
                     documentId: activeTab.documentId,
                 },
             });
         },
-        [activeTab, handleChat],
+        [activeTab, handleChat, agentMode],
     );
 
     const handleDocClick = (doc: Document) => {
@@ -1232,6 +1261,62 @@ export default function ProjectAssistantChatPage({ params }: Props) {
 
                     {/* ChatInput */}
                     <div className="shrink-0 px-4 pb-4">
+                        <div className="mb-2 flex items-center justify-end gap-2">
+                            {agentWorkflows.length > 0 && (
+                                <select
+                                    value=""
+                                    disabled={isResponseLoading}
+                                    onChange={(e) => {
+                                        const wf = agentWorkflows.find(
+                                            (w) => w.id === e.target.value,
+                                        );
+                                        if (!wf) return;
+                                        setAgentMode(true);
+                                        void handleChat(
+                                            {
+                                                role: "user",
+                                                content: `Run the "${wf.name}" workflow for this matter.`,
+                                            },
+                                            {
+                                                agent: true,
+                                                agentWorkflowId: wf.id,
+                                            },
+                                        );
+                                    }}
+                                    title="Run a codified agent workflow (plans deterministically and executes with tools)."
+                                    className="h-7 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 outline-none hover:border-gray-400"
+                                >
+                                    <option value="">Run workflow…</option>
+                                    {agentWorkflows.map((w) => (
+                                        <option key={w.id} value={w.id}>
+                                            {w.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setBuilderOpen(true)}
+                                title="Build / manage agent workflows"
+                                className="inline-flex h-7 items-center gap-1 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-500 hover:border-gray-400"
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Workflows
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAgentMode((v) => !v)}
+                                title="Agent mode plans the task, executes it with tools, and verifies citations before answering."
+                                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${
+                                    agentMode
+                                        ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-400"
+                                }`}
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Agent mode{agentMode ? " · on" : ""}
+                            </button>
+                        </div>
                         <ChatInput
                             ref={chatInputRef}
                             onSubmit={handleSubmit}
@@ -1248,6 +1333,11 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                 open={!!ownerOnlyAction}
                 action={ownerOnlyAction ?? undefined}
                 onClose={() => setOwnerOnlyAction(null)}
+            />
+            <AgentWorkflowBuilderModal
+                open={builderOpen}
+                onClose={() => setBuilderOpen(false)}
+                onChanged={reloadWorkflows}
             />
         </div>
     );

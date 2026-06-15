@@ -41,6 +41,11 @@ import { safeErrorMessage } from "./safeError";
 import { normalizeMemoryKind, saveProjectMemory } from "./projectMemory";
 import { saveProjectDeadline } from "./projectDeadlines";
 import { saveProjectHearing } from "./projectHearings";
+import { saveTimeEntry } from "./billing";
+import { computeLimitation, listLimitationKeys } from "./limitation";
+import { hybridRetrieve } from "./rag/retrieve";
+import { listAccessibleProjectIds } from "./access";
+import { getVaultInProject, listVaultDocumentIds } from "./vaults";
 import { PARTY_ROLES, saveProjectParty } from "./projectParties";
 import { runConflictCheck } from "./conflicts";
 import { saveProjectTask } from "./projectTasks";
@@ -331,6 +336,33 @@ export const PROJECT_EXTRA_TOOLS = [
   {
     type: "function",
     function: {
+      name: "save_time_entry",
+      description:
+        "Log a billable time entry for this matter. Entries appear in the project's Billing tab and can be invoiced. Use it when the user mentions time spent on work (e.g. 'spent 45 minutes reviewing the SPA', 'put down an hour for the client call'). Convert the time to minutes. The hourly rate defaults to the firm's configured rate.",
+      parameters: {
+        type: "object",
+        properties: {
+          description: {
+            type: "string",
+            description: "What the work was (e.g. 'Reviewed and marked up the SPA').",
+          },
+          minutes: {
+            type: "integer",
+            description: "Time spent, in minutes.",
+          },
+          entry_date: {
+            type: "string",
+            description:
+              "Date of the work in YYYY-MM-DD format. Defaults to today if omitted.",
+          },
+        },
+        required: ["description", "minutes"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "save_party",
       description:
         "Record a party connected to this matter (client, counterparty, opposing counsel, witness). Every future conversation in this project will see recorded parties, they appear in the project's Parties tab, and conflict checks match them across all the user's matters. Use it when the conversation establishes who is involved in the matter (e.g. 'the counterparty is Acme GmbH', 'we act for Northwind Ltd'). Do NOT record parties already listed in MATTER PARTIES.",
@@ -412,6 +444,62 @@ export const PROJECT_EXTRA_TOOLS = [
           query: {
             type: "string",
             description: "Keyword or phrase to search for across all matters.",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "compute_limitation",
+      description:
+        "Compute the last date for filing under Indian limitation law (Limitation Act 1963 and special statutes) from a trigger/cause-of-action date. Use when the user asks about limitation, the last date to file, or whether something is time-barred for a recognised Indian cause (suit on contract/money, possession, appeal, SLP, review, S.34 arbitration challenge, S.138 cheque complaint, consumer complaint, etc.). Report the due date and days remaining, state the statutory basis, note any condonation caveat, and offer to save it as a deadline (save_deadline). Always tell the user this is advisory and to verify.",
+      parameters: {
+        type: "object",
+        properties: {
+          limitation_key: {
+            type: "string",
+            description:
+              "The limitation type key. Call with an empty key first if unsure to receive the list of available keys.",
+          },
+          trigger_date: {
+            type: "string",
+            description:
+              "The cause-of-action / trigger date in YYYY-MM-DD format (resolve relative dates against TODAY'S DATE).",
+          },
+        },
+        required: ["limitation_key", "trigger_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "retrieve_context",
+      description:
+        "Semantically search across this matter's documents (and, by default, the firm's other accessible matters) for passages relevant to a question, using hybrid semantic + keyword retrieval. Returns the most relevant chunks with their document_id and page/section so you can read and cite them. Use this to locate where something is discussed across large or numerous documents before answering; then cite the specific document and page. Set this_matter_only to restrict to the current matter.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "What to search for.",
+          },
+          limit: {
+            type: "integer",
+            description: "Maximum passages to return (default 8).",
+          },
+          this_matter_only: {
+            type: "boolean",
+            description:
+              "If true, restrict the search to the current matter's documents.",
+          },
+          vault_id: {
+            type: "string",
+            description:
+              "If set, restrict the search to the documents in this Vault (document set).",
           },
         },
         required: ["query"],
@@ -2172,6 +2260,12 @@ export type HearingSavedResult = {
   court?: string | null;
 };
 
+export type TimeEntrySavedResult = {
+  time_entry_id: string;
+  description: string;
+  minutes: number;
+};
+
 export type TaskSavedResult = {
   task_id: string;
   title: string;
@@ -2532,6 +2626,7 @@ export async function runToolCalls(
   memoriesSaved: MemorySavedResult[];
   deadlinesSaved: DeadlineSavedResult[];
   hearingsSaved: HearingSavedResult[];
+  timeEntriesSaved: TimeEntrySavedResult[];
   partiesSaved: PartySavedResult[];
   conflictChecks: ConflictCheckResultEvent[];
   firmKnowledgeSearches: FirmKnowledgeSearchedResult[];
@@ -2553,6 +2648,7 @@ export async function runToolCalls(
   const memoriesSaved: MemorySavedResult[] = [];
   const deadlinesSaved: DeadlineSavedResult[] = [];
   const hearingsSaved: HearingSavedResult[] = [];
+  const timeEntriesSaved: TimeEntrySavedResult[] = [];
   const partiesSaved: PartySavedResult[] = [];
   const conflictChecks: ConflictCheckResultEvent[] = [];
   const firmKnowledgeSearches: FirmKnowledgeSearchedResult[] = [];
@@ -2852,6 +2948,54 @@ export async function runToolCalls(
           ),
         });
       }
+    } else if (tc.function.name === "save_time_entry") {
+      if (!projectId) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Time tracking is only available inside project chats.",
+          }),
+        });
+      } else {
+        const description = String(args.description ?? "").trim();
+        const minutes = Math.max(
+          0,
+          Math.round(Number(args.minutes ?? 0)) || 0,
+        );
+        const saved = await saveTimeEntry({
+          projectId,
+          userId,
+          description,
+          minutes,
+          entryDate:
+            typeof args.entry_date === "string" ? args.entry_date : undefined,
+          source: "assistant",
+          sourceChatId: chatId ?? null,
+          db,
+        });
+        if (saved.ok) {
+          const result: TimeEntrySavedResult = {
+            time_entry_id: saved.id,
+            description,
+            minutes,
+          };
+          timeEntriesSaved.push(result);
+          write(
+            `data: ${JSON.stringify({ type: "time_entry_saved", ...result })}\n\n`,
+          );
+        }
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(
+            saved.ok
+              ? { ok: true, time_entry_id: saved.id }
+              : { ok: false, error: saved.error },
+          ),
+        });
+      }
     } else if (tc.function.name === "save_task") {
       if (!projectId) {
         toolResults.push({
@@ -3016,6 +3160,81 @@ export async function runToolCalls(
           role: "tool",
           tool_call_id: tc.id,
           content: JSON.stringify({ ok: true, ...result }),
+        });
+      }
+    } else if (tc.function.name === "compute_limitation") {
+      const key = String(args.limitation_key ?? "").trim();
+      if (!key) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: false,
+            error: "Specify a limitation_key.",
+            available_keys: listLimitationKeys(),
+          }),
+        });
+      } else {
+        const result = computeLimitation({
+          triggerDate: String(args.trigger_date ?? "").trim(),
+          key,
+        });
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result),
+        });
+      }
+    } else if (tc.function.name === "retrieve_context") {
+      const query = String(args.query ?? "").trim();
+      if (!query) {
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({ ok: false, error: "Provide a query." }),
+        });
+      } else {
+        const limit =
+          typeof args.limit === "number" ? args.limit : undefined;
+        // Vault scope: restrict to a document set within the current matter.
+        let documentIds: string[] | undefined;
+        const vaultId =
+          typeof args.vault_id === "string" ? args.vault_id : null;
+        if (vaultId && projectId) {
+          const vault = await getVaultInProject(vaultId, projectId, db);
+          if (vault) documentIds = await listVaultDocumentIds(vaultId, db);
+        }
+        let projectIds: string[];
+        if (args.this_matter_only && projectId) {
+          projectIds = [projectId];
+        } else {
+          projectIds = await listAccessibleProjectIds(userId, userEmail, db);
+          if (projectId && !projectIds.includes(projectId))
+            projectIds.push(projectId);
+        }
+        const hits = await hybridRetrieve({
+          query,
+          projectIds,
+          documentIds,
+          db,
+          apiKeys,
+          limit,
+        });
+        toolResults.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify({
+            ok: true,
+            query,
+            note: "Hybrid retrieval over indexed matter documents. Read the cited document/page to quote precisely before citing.",
+            hits: hits.map((h) => ({
+              document_id: h.document_id,
+              page: h.page,
+              section_no: h.section_no,
+              para_no: h.para_no,
+              text: h.text,
+            })),
+          }),
         });
       }
     } else if (tc.function.name === "read_table_cells" && tabularStore) {
@@ -4163,6 +4382,7 @@ export async function runToolCalls(
     memoriesSaved,
     deadlinesSaved,
     hearingsSaved,
+    timeEntriesSaved,
     partiesSaved,
     conflictChecks,
     firmKnowledgeSearches,
@@ -4395,6 +4615,12 @@ type AssistantEvent =
       hearing_date: string;
       court?: string | null;
     }
+  | {
+      type: "time_entry_saved";
+      time_entry_id: string;
+      description: string;
+      minutes: number;
+    }
   | { type: "party_saved"; party_id: string; name: string; role: string }
   | { type: "task_saved"; task_id: string; title: string }
   | {
@@ -4417,6 +4643,22 @@ type AssistantEvent =
   | CaseCitationEvent
   | IndiankanoonToolEvent
   | { type: "case_opinions"; cluster_id: number; case: unknown }
+  | {
+      type: "agent_plan";
+      goal: string;
+      steps: {
+        idx: number;
+        type: string;
+        tool?: string | null;
+        intent: string;
+      }[];
+    }
+  | {
+      type: "agent_verification";
+      confidence: number;
+      unverified_count: number;
+      notes: string;
+    }
   | { type: "content"; text: string }
   | { type: "error"; message: string };
 
@@ -4711,6 +4953,7 @@ export async function runLLMStream(params: {
           memoriesSaved,
           deadlinesSaved,
           hearingsSaved,
+          timeEntriesSaved,
           partiesSaved,
           conflictChecks,
           firmKnowledgeSearches,
@@ -4797,6 +5040,14 @@ export async function runLLMStream(params: {
             purpose: h.purpose,
             hearing_date: h.hearing_date,
             court: h.court,
+          });
+        }
+        for (const te of timeEntriesSaved) {
+          events.push({
+            type: "time_entry_saved",
+            time_entry_id: te.time_entry_id,
+            description: te.description,
+            minutes: te.minutes,
           });
         }
         for (const p of partiesSaved) {

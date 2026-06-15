@@ -92,6 +92,8 @@ import { ProjectReviewsTab } from "./ProjectReviewsTab";
 import { ProjectMemoryTab } from "./ProjectMemoryTab";
 import { ProjectDeadlinesTab } from "./ProjectDeadlinesTab";
 import { ProjectHearingsTab } from "./ProjectHearingsTab";
+import { ProjectBillingTab } from "./ProjectBillingTab";
+import { ProjectVaultsTab } from "./ProjectVaultsTab";
 import { ProjectPartiesTab } from "./ProjectPartiesTab";
 import { ProjectTimelineTab } from "./ProjectTimelineTab";
 import { ProjectTasksTab } from "./ProjectTasksTab";
@@ -288,7 +290,9 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
         tabParam === "hearings" ||
         tabParam === "parties" ||
         tabParam === "timeline" ||
-        tabParam === "tasks"
+        tabParam === "tasks" ||
+        tabParam === "billing" ||
+        tabParam === "vaults"
             ? tabParam
             : initialTab;
     const [addDocsOpen, setAddDocsOpen] = useState(false);
@@ -630,6 +634,13 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                     "Draft a client-ready status report for this matter, summarising where things stand, upcoming deadlines, open items, and next steps.",
             },
         ]);
+        const id = await saveChat(projectId);
+        if (id) router.push(`/projects/${projectId}/assistant/chat/${id}`);
+        else setNewChatMessages(null);
+    }
+
+    async function handleDraftDocument(prompt: string) {
+        setNewChatMessages([{ role: "user", content: prompt }]);
         const id = await saveChat(projectId);
         if (id) router.push(`/projects/${projectId}/assistant/chat/${id}`);
         else setNewChatMessages(null);
@@ -2683,6 +2694,8 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                     { id: "hearings", label: "Hearings" },
                     { id: "tasks", label: "Checklist" },
                     { id: "parties", label: "Parties" },
+                    { id: "billing", label: "Billing" },
+                    { id: "vaults", label: "Vaults" },
                     { id: "timeline", label: "Timeline" },
                 ]}
                 active={tab}
@@ -3535,6 +3548,22 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                         />
                     )}
 
+                    {/* Tab: Billing */}
+                    {tab === "billing" && (
+                        <ProjectBillingTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
+                    {/* Tab: Vaults */}
+                    {tab === "vaults" && (
+                        <ProjectVaultsTab
+                            projectId={projectId}
+                            search={search}
+                        />
+                    )}
+
                     {/* Tab: Parties */}
                     {tab === "parties" && (
                         <ProjectPartiesTab
@@ -3566,6 +3595,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                             project={project}
                             onNavigate={handleTabChange}
                             onDraftStatusReport={handleDraftStatusReport}
+                            onDraftDocument={handleDraftDocument}
                         />
                     )}
                         </>
@@ -3634,6 +3664,7 @@ export function ProjectPage({ projectId, initialTab = "overview" }: Props) {
                 open={newTRModalOpen}
                 onClose={() => setNewTRModalOpen(false)}
                 onAdd={handleCreateReview}
+                projectId={projectId}
                 projectDocs={project?.documents?.filter(
                     (d) => d.status === "ready",
                 )}

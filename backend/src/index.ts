@@ -9,8 +9,11 @@ import { projectChatRouter } from "./routes/projectChat";
 import { projectMemoryRouter } from "./routes/projectMemory";
 import { projectDeadlinesRouter } from "./routes/projectDeadlines";
 import { projectHearingsRouter } from "./routes/projectHearings";
+import { billingRouter, projectBillingRouter } from "./routes/billing";
 import { projectPartiesRouter } from "./routes/projectParties";
 import { projectTimelineRouter } from "./routes/projectTimeline";
+import { vaultsRouter } from "./routes/vaults";
+import { agentWorkflowsRouter } from "./routes/agentWorkflows";
 import { projectTasksRouter } from "./routes/projectTasks";
 import { matterTemplatesRouter } from "./routes/matterTemplates";
 import { conflictsRouter } from "./routes/conflicts";
@@ -21,6 +24,9 @@ import { workflowsRouter } from "./routes/workflows";
 import { userRouter } from "./routes/user";
 import { downloadsRouter } from "./routes/downloads";
 import { caseLawRouter } from "./routes/caseLaw";
+import { randomUUID } from "node:crypto";
+import { logger } from "./lib/logger";
+import { captureException } from "./lib/observability";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -93,6 +99,14 @@ const dataDeleteLimiter = makeLimiter({
   message: "Too many data deletion requests. Please try again later.",
 });
 
+// Reindexing embeds every chunk of every document — bound it to protect
+// embedding-provider spend and the database.
+const reindexLimiter = makeLimiter({
+  windowMs: hours(envInt("RATE_LIMIT_REINDEX_WINDOW_HOURS", 1)),
+  max: envInt("RATE_LIMIT_REINDEX_MAX", 20),
+  message: "Too many reindex requests. Please try again later.",
+});
+
 function jsonLimitForPath(path: string): string {
   return "50mb";
 }
@@ -127,6 +141,25 @@ app.use(
   }),
 );
 
+// Request tracing + structured access log. A request id is attached to
+// res.locals so handlers and the error handler can correlate logs.
+app.use((req, res, next) => {
+  const requestId = randomUUID();
+  res.locals.requestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+  const start = Date.now();
+  res.on("finish", () => {
+    logger.info("request", {
+      requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      ms: Date.now() - start,
+    });
+  });
+  next();
+});
+
 app.use(generalLimiter);
 
 app.post("/chat", chatLimiter);
@@ -142,6 +175,8 @@ app.put(
   uploadLimiter,
 );
 app.post("/projects/:projectId/documents", uploadLimiter);
+app.post("/projects/:projectId/reindex", reindexLimiter);
+app.post("/projects/:projectId/vaults/:vaultId/reindex", reindexLimiter);
 app.get("/user/export", exportLimiter);
 app.get("/user/chats/export", exportLimiter);
 app.get("/user/tabular-reviews/export", exportLimiter);
@@ -160,8 +195,12 @@ app.use("/projects/:projectId/chat", projectChatRouter);
 app.use("/projects/:projectId/memory", projectMemoryRouter);
 app.use("/projects/:projectId/deadlines", projectDeadlinesRouter);
 app.use("/projects/:projectId/hearings", projectHearingsRouter);
+app.use("/projects/:projectId/billing", projectBillingRouter);
+app.use("/billing", billingRouter);
 app.use("/projects/:projectId/parties", projectPartiesRouter);
 app.use("/projects/:projectId/timeline", projectTimelineRouter);
+app.use("/projects/:projectId/vaults", vaultsRouter);
+app.use("/agent-workflows", agentWorkflowsRouter);
 app.use("/projects/:projectId/tasks", projectTasksRouter);
 app.use("/matter-templates", matterTemplatesRouter);
 app.use("/conflicts", conflictsRouter);
@@ -176,9 +215,72 @@ app.use("/case-law", caseLawRouter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-if (process.env.VERCEL !== "1") {
-  app.listen(PORT, () => {
-    console.log(`lexOS backend running on port ${PORT}`);
+// 404 for unmatched API routes.
+app.use((_req, res) => {
+  res.status(404).json({ detail: "Not found" });
+});
+
+// Global error handler — async route throws and body-parser errors land here
+// instead of crashing the process or hanging the request. Error text is
+// scrubbed of secrets before logging; clients get a generic message.
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const status =
+      typeof (err as { status?: unknown })?.status === "number"
+        ? (err as { status: number }).status
+        : (err as { type?: string })?.type === "entity.too.large"
+          ? 413
+          : 500;
+    // Client errors (4xx) are logged at warn without alerting; 5xx are
+    // captured (structured log + optional webhook).
+    if (status >= 500) {
+      captureException(err, {
+        path: _req.path,
+        method: _req.method,
+        requestId: res.locals.requestId,
+      });
+    } else {
+      logger.warn("client_error", {
+        status,
+        path: _req.path,
+        requestId: res.locals.requestId,
+      });
+    }
+    if (res.headersSent) return;
+    res.status(status).json({
+      detail:
+        status === 413
+          ? "Payload too large."
+          : "Internal server error.",
+    });
+  },
+);
+
+const server =
+  process.env.VERCEL !== "1"
+    ? app.listen(PORT, () => {
+        logger.info("server_started", { port: PORT });
+      })
+    : null;
+
+// Crash-safety: capture instead of dying on an unhandled async error, and
+// shut down cleanly on a platform stop signal.
+process.on("unhandledRejection", (reason) => {
+  captureException(reason, { kind: "unhandledRejection" });
+});
+process.on("uncaughtException", (err) => {
+  captureException(err, { kind: "uncaughtException" });
+});
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    logger.info("shutdown", { signal });
+    if (server) server.close(() => process.exit(0));
+    else process.exit(0);
   });
 }
 

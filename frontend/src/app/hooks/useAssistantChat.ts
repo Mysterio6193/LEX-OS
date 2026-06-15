@@ -282,6 +282,10 @@ export function useAssistantChat({
     message: Message,
     opts?: {
       displayedDoc?: { filename: string; documentId: string } | null;
+      /** Opt-in: run the plan→execute→verify agent loop for this turn. */
+      agent?: boolean;
+      /** Optional: seed the agent plan from a library workflow. */
+      agentWorkflowId?: string;
     },
   ): Promise<string | null> => {
     if (!message.content.trim()) return null;
@@ -348,6 +352,8 @@ export function useAssistantChat({
               : undefined,
             attached_documents:
               attachedDocs.length > 0 ? attachedDocs : undefined,
+            agent: opts?.agent ? true : undefined,
+            agent_workflow_id: opts?.agentWorkflowId,
             signal: controller.signal,
           })
         : streamChat({
@@ -614,12 +620,47 @@ export function useAssistantChat({
               continue;
             }
 
+            if (data.type === "time_entry_saved") {
+              pushEvent({
+                type: "time_entry_saved",
+                time_entry_id: data.time_entry_id as string,
+                description: data.description as string,
+                minutes: (data.minutes as number) ?? 0,
+              });
+              continue;
+            }
+
             if (data.type === "party_saved") {
               pushEvent({
                 type: "party_saved",
                 party_id: data.party_id as string,
                 name: data.name as string,
                 role: data.role as string,
+              });
+              continue;
+            }
+
+            if (data.type === "agent_plan") {
+              pushEvent({
+                type: "agent_plan",
+                goal: (data.goal as string) ?? "",
+                steps:
+                  (data.steps as {
+                    idx: number;
+                    type: string;
+                    tool?: string | null;
+                    intent: string;
+                  }[]) ?? [],
+              });
+              continue;
+            }
+
+            if (data.type === "agent_verification") {
+              pushEvent({
+                type: "agent_verification",
+                confidence: (data.confidence as number) ?? 0,
+                unverified_count: (data.unverified_count as number) ?? 0,
+                notes: (data.notes as string) ?? "",
               });
               continue;
             }

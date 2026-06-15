@@ -180,6 +180,7 @@ export async function buildUserAccountExport(
         tabularReviews,
         sharedProjects,
         sharedTabularReviews,
+        agentWorkflows,
     ] = await Promise.all([
         selectAll(db, "user_profiles", (query) => query.eq("user_id", userId)),
         loadApiKeyStatus(db, userId),
@@ -236,6 +237,9 @@ export async function buildUserAccountExport(
                   "id, user_id, project_id, title, practice, created_at, updated_at",
               )
             : Promise.resolve([]),
+        selectAll(db, "agent_workflows", (query) =>
+            query.eq("user_id", userId).order("created_at", { ascending: true }),
+        ),
     ]);
 
     const projectIds = idsFrom(projects);
@@ -259,6 +263,8 @@ export async function buildUserAccountExport(
         projectHearings,
         projectParties,
         projectTasks,
+        timeEntries,
+        invoices,
     ] = await Promise.all([
         selectByIds(db, "project_subfolders", "project_id", projectIds),
         selectByIds(db, "document_versions", "document_id", documentIds),
@@ -269,6 +275,8 @@ export async function buildUserAccountExport(
         selectByIds(db, "project_hearings", "project_id", projectIds),
         selectByIds(db, "project_parties", "project_id", projectIds),
         selectByIds(db, "project_tasks", "project_id", projectIds),
+        selectByIds(db, "time_entries", "project_id", projectIds),
+        selectByIds(db, "invoices", "project_id", projectIds),
     ]);
 
     return {
@@ -284,10 +292,13 @@ export async function buildUserAccountExport(
         project_hearings: projectHearings,
         project_parties: projectParties,
         project_tasks: projectTasks,
+        time_entries: timeEntries,
+        invoices,
         documents,
         document_versions: versions,
         document_edits: edits,
         workflows,
+        agent_workflows: agentWorkflows,
         hidden_workflows: hiddenWorkflows,
         workflow_shares_by_user: workflowSharesByUser,
         workflow_shares_with_user: workflowSharesWithUser,

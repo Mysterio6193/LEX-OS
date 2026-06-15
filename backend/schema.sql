@@ -3,6 +3,8 @@
 -- to apply the incremental migration files in backend/oss-migrations instead.
 
 create extension if not exists "pgcrypto";
+-- RAG foundation (v2): pgvector for dense retrieval over document_chunks.
+create extension if not exists vector;
 
 -- ---------------------------------------------------------------------------
 -- User profiles
@@ -21,6 +23,10 @@ create table if not exists public.user_profiles (
   quote_model text,
   mfa_on_login boolean not null default false,
   legal_research_in boolean not null default true,
+  -- Firm billing settings (India GST invoicing).
+  firm_gstin text,
+  firm_state text,
+  default_hourly_rate numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -246,6 +252,51 @@ create table if not exists public.document_edits (
 create index if not exists document_edits_document_id_idx
   on public.document_edits(document_id, created_at desc);
 
+-- ---------------------------------------------------------------------------
+-- Document chunks (RAG)
+-- ---------------------------------------------------------------------------
+--
+-- Structure-aware chunks with dense (pgvector, 1536-dim) + sparse (tsvector)
+-- representations for hybrid retrieval. See oss-migrations/20260614_document_chunks.sql.
+
+create table if not exists public.document_chunks (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid not null references public.documents(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete cascade,
+  user_id text not null,
+  chunk_index integer not null,
+  parent_index integer,
+  text text not null,
+  summary text,
+  embedding vector(1536),
+  tsv tsvector generated always as (to_tsvector('english', coalesce(text, ''))) stored,
+  doc_type text,
+  section_no text,
+  para_no text,
+  page integer,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_document_chunks_document
+  on public.document_chunks(document_id);
+create index if not exists idx_document_chunks_project
+  on public.document_chunks(project_id);
+create index if not exists idx_document_chunks_tsv
+  on public.document_chunks using gin (tsv);
+do $$
+begin
+  begin
+    create index if not exists idx_document_chunks_embedding_hnsw
+      on public.document_chunks using hnsw (embedding vector_cosine_ops);
+  exception when others then
+    create index if not exists idx_document_chunks_embedding_ivf
+      on public.document_chunks using ivfflat (embedding vector_cosine_ops)
+      with (lists = 100);
+  end;
+end;
+$$;
+
 create index if not exists document_edits_message_id_idx
   on public.document_edits(chat_message_id);
 
@@ -430,6 +481,59 @@ create index if not exists idx_project_hearings_project
   on public.project_hearings(project_id, hearing_date);
 
 -- ---------------------------------------------------------------------------
+-- Time tracking & invoices (India GST)
+-- ---------------------------------------------------------------------------
+--
+-- Billable time entries per matter and GST-compliant invoices generated
+-- from them (SAC 9982, 18% — CGST+SGST intra-state, IGST inter-state).
+
+create table if not exists public.time_entries (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  entry_date date not null,
+  description text not null,
+  minutes integer not null default 0,
+  rate numeric not null default 0,
+  amount numeric not null default 0,
+  billed boolean not null default false,
+  source text not null default 'user'
+    check (source in ('assistant', 'user')),
+  source_chat_id uuid references public.chats(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_time_entries_project
+  on public.time_entries(project_id, entry_date);
+
+create table if not exists public.invoices (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  invoice_number text not null,
+  invoice_date date not null,
+  client_name text,
+  client_gstin text,
+  place_of_supply text,
+  sac_code text not null default '9982',
+  line_items jsonb not null default '[]'::jsonb,
+  subtotal numeric not null default 0,
+  cgst numeric not null default 0,
+  sgst numeric not null default 0,
+  igst numeric not null default 0,
+  total numeric not null default 0,
+  status text not null default 'draft'
+    check (status in ('draft', 'sent', 'paid')),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_invoices_project
+  on public.invoices(project_id, invoice_date);
+
+-- ---------------------------------------------------------------------------
 -- Matter parties
 -- ---------------------------------------------------------------------------
 --
@@ -570,6 +674,152 @@ revoke all on public.clients from anon, authenticated;
 revoke all on public.projects from anon, authenticated;
 revoke all on public.project_subfolders from anon, authenticated;
 revoke all on public.documents from anon, authenticated;
+revoke all on public.document_chunks from anon, authenticated;
+revoke all on public.agent_runs from anon, authenticated;
+revoke all on public.agent_steps from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Agentic core: plan/execute/verify runs
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.agent_runs (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references public.projects(id) on delete cascade,
+  user_id text not null,
+  chat_id uuid references public.chats(id) on delete set null,
+  goal text not null,
+  plan jsonb not null default '[]'::jsonb,
+  status text not null default 'planning'
+    check (status in ('planning', 'executing', 'verifying', 'done', 'error')),
+  model text,
+  tokens integer,
+  confidence numeric,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_agent_runs_project
+  on public.agent_runs(project_id, created_at desc);
+
+create table if not exists public.agent_steps (
+  id uuid primary key default gen_random_uuid(),
+  run_id uuid not null references public.agent_runs(id) on delete cascade,
+  idx integer not null,
+  type text not null default 'tool'
+    check (type in ('tool', 'reason')),
+  tool text,
+  intent text,
+  input jsonb,
+  output jsonb,
+  citations jsonb,
+  confidence numeric,
+  verified boolean,
+  status text not null default 'pending'
+    check (status in ('pending', 'running', 'done', 'error')),
+  error text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_agent_steps_run
+  on public.agent_steps(run_id, idx);
+
+-- Dense retrieval RPC (cosine similarity over document_chunks).
+create or replace function public.match_document_chunks(
+  query_embedding vector(1536),
+  match_project_ids uuid[],
+  match_count int default 50
+)
+returns table (
+  id uuid, document_id uuid, project_id uuid, chunk_index int,
+  parent_index int, text text, doc_type text, section_no text,
+  para_no text, page int, score double precision
+)
+language sql stable as $$
+  select
+    c.id, c.document_id, c.project_id, c.chunk_index, c.parent_index,
+    c.text, c.doc_type, c.section_no, c.para_no, c.page,
+    1 - (c.embedding <=> query_embedding) as score
+  from public.document_chunks c
+  where c.embedding is not null
+    and (match_project_ids is null or c.project_id = any (match_project_ids))
+  order by c.embedding <=> query_embedding
+  limit match_count;
+$$;
+
+revoke all on function public.match_document_chunks(vector, uuid[], int)
+  from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Matter Vault: named document sets within a matter
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.vaults (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id text not null,
+  name text not null,
+  description text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_vaults_project on public.vaults(project_id);
+
+create table if not exists public.vault_documents (
+  id uuid primary key default gen_random_uuid(),
+  vault_id uuid not null references public.vaults(id) on delete cascade,
+  document_id uuid not null references public.documents(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (vault_id, document_id)
+);
+
+create index if not exists idx_vault_documents_vault
+  on public.vault_documents(vault_id);
+
+create or replace function public.match_chunks_in_documents(
+  query_embedding vector(1536),
+  match_document_ids uuid[],
+  match_count int default 50
+)
+returns table (
+  id uuid, document_id uuid, project_id uuid, chunk_index int,
+  parent_index int, text text, doc_type text, section_no text,
+  para_no text, page int, score double precision
+)
+language sql stable as $$
+  select
+    c.id, c.document_id, c.project_id, c.chunk_index, c.parent_index,
+    c.text, c.doc_type, c.section_no, c.para_no, c.page,
+    1 - (c.embedding <=> query_embedding) as score
+  from public.document_chunks c
+  where c.embedding is not null
+    and c.document_id = any (match_document_ids)
+  order by c.embedding <=> query_embedding
+  limit match_count;
+$$;
+
+-- Agent Builder: user-defined agent workflows (playbooks).
+create table if not exists public.agent_workflows (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  name text not null,
+  description text,
+  practice text,
+  steps jsonb not null default '[]'::jsonb,
+  is_shared boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_agent_workflows_user
+  on public.agent_workflows(user_id);
+
+revoke all on public.vaults from anon, authenticated;
+revoke all on public.vault_documents from anon, authenticated;
+revoke all on public.agent_workflows from anon, authenticated;
+revoke all on function public.match_chunks_in_documents(vector, uuid[], int)
+  from anon, authenticated;
+
 revoke all on public.document_versions from anon, authenticated;
 revoke all on public.document_edits from anon, authenticated;
 revoke all on public.workflows from anon, authenticated;
@@ -580,6 +830,8 @@ revoke all on public.chat_messages from anon, authenticated;
 revoke all on public.project_memories from anon, authenticated;
 revoke all on public.project_deadlines from anon, authenticated;
 revoke all on public.project_hearings from anon, authenticated;
+revoke all on public.time_entries from anon, authenticated;
+revoke all on public.invoices from anon, authenticated;
 revoke all on public.project_parties from anon, authenticated;
 revoke all on public.project_tasks from anon, authenticated;
 revoke all on public.tabular_reviews from anon, authenticated;

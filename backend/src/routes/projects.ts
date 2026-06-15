@@ -16,9 +16,43 @@ import { docxToPdf, convertedPdfKey } from "../lib/convert";
 import { checkProjectAccess } from "../lib/access";
 import { singleFileUpload } from "../lib/upload";
 import { deleteUserProjects } from "../lib/userDataCleanup";
+import { getUserModelSettings } from "../lib/userSettings";
+import { ingestDocumentById } from "../lib/rag/ingest";
 
 export const projectsRouter = Router();
 const ALLOWED_TYPES = new Set(["pdf", "docx", "doc"]);
+
+// POST /projects/:projectId/reindex — (re)build the RAG index (document_chunks)
+// for every document in the matter. Best-effort per document; embeddings are
+// skipped when no provider key is configured (sparse-only retrieval still works).
+projectsRouter.post("/:projectId/reindex", requireAuth, async (req, res) => {
+  const userId = res.locals.userId as string;
+  const userEmail = res.locals.userEmail as string | undefined;
+  const { projectId } = req.params;
+  const db = createServerSupabase();
+
+  const access = await checkProjectAccess(projectId, userId, userEmail, db);
+  if (!access.ok)
+    return void res.status(404).json({ detail: "Project not found" });
+
+  const { api_keys: apiKeys } = await getUserModelSettings(userId, db);
+  const { data: docs } = await db
+    .from("documents")
+    .select("id")
+    .eq("project_id", projectId);
+  const rows = (docs ?? []) as { id: string }[];
+
+  let chunks = 0;
+  let indexed = 0;
+  for (const d of rows) {
+    const r = await ingestDocumentById({ documentId: d.id, apiKeys, db });
+    if (r.ok && r.chunks > 0) {
+      indexed += 1;
+      chunks += r.chunks;
+    }
+  }
+  res.json({ ok: true, documents: rows.length, indexed, chunks });
+});
 
 function normalizeDocumentFilename(nextName: unknown, currentName: string) {
   if (typeof nextName !== "string") return null;

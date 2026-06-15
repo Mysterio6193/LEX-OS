@@ -171,6 +171,15 @@ For updating existing deployments, run the incremental migration files sequentia
 9. **👥 Cloning & Archival** — Clone a matter's memory/parties/tasks into a new matter, and archive closed matters out of the default lists while keeping them accessible.
 10. **🔍 Firm Knowledge Search** — The `search_firm_knowledge` tool lets the assistant answer "how do we usually handle X" by searching memories, deadlines, tasks, parties, clients, and document names across all your matters, citing the matter each result came from.
 
+### 🇮🇳 India practice features
+
+11. **⚖️ India matter types & drafting** — Built-in matter templates for Indian practice (Writ Petition Art. 226/32, Bail Application BNSS/CrPC, Insolvency NCLT/IBC, Cheque Dishonour S.138 NI Act, Arbitration A&C Act 1996, Consumer Complaint CP Act 2019, Civil Suit CPC), and assistant drafting of India-standard documents (vakalatnama, legal notice incl. S.138/S.80 notices, plaint, written statement, bail application, affidavit) with correct cause title, grounds, prayer, and verification.
+12. **🏛️ Court / forum metadata** — Each matter records its matter type, court, case number, jurisdiction, and filing date (in **Project Details**), shown on the Overview and injected into every chat so the assistant knows the forum.
+13. **📜 Court Hearings (cause list)** — The **Hearings** tab tracks purpose/stage, court, case number, next date, and status (scheduled/adjourned/done); the assistant records hearings from chat via `save_hearing`, and upcoming hearings surface on the Overview and in every chat.
+14. **🧾 GST billing & invoices** — The **Billing** tab captures time entries (the assistant logs them via `save_time_entry`) and generates GST-compliant invoices for legal services (SAC 9982) — CGST 9% + SGST 9% intra-state or IGST 18% inter-state — based on the firm's GSTIN/home state and the place of supply, with draft/sent/paid tracking.
+
+> For existing deployments, apply the incremental migrations in [backend/oss-migrations/](backend/oss-migrations): `20260613_project_court_metadata.sql`, `20260613_project_hearings.sql`, `20260613_billing_settings.sql`, and `20260613_billing.sql` (the earlier `20260612_*` migrations cover memory, deadlines, clients, precedents, parties, tasks, and archival). A fresh database gets all of this from `schema.sql`.
+
 ---
 
 ## 🇮🇳 7. Indian Kanoon Integration
@@ -181,6 +190,21 @@ For updating existing deployments, run the incremental migration files sequentia
 3. **🔗 Citation Matching:** Verify citing precedents dynamically in the chat workspace.
 
 Configure the provider key in `backend/.env` (using `INDIANKANOON_API_TOKEN`) or allow users to save their own token under **Account > Models & API Keys** to enable these features.
+
+---
+
+## 🤖 7a. AI Engine (v2 — Agentic Core + RAG)
+
+Phase 1 of the v2 build adds a Harvey-grade engine on top of the existing stack (no rewrite):
+
+- **Agentic core** — an opt-in **Agent mode** on matter chat runs a *planner → executor → verifier* loop: the planner decomposes the goal into a typed plan over the tool registry, the existing tool loop executes it, and a verifier scores confidence and runs the citation guard. The plan and verification stream as a live trace and are persisted in `agent_runs` / `agent_steps`.
+- **Hybrid retrieval (RAG)** — documents are chunked structure-aware (judgment / contract / statute / generic, parent–child, page & section metadata) and indexed into `document_chunks` with a dense `pgvector` embedding **and** a sparse `tsvector`. The `retrieve_context` tool fuses dense + sparse results with Reciprocal Rank Fusion and an optional cross-encoder rerank, scoped to the firm's accessible matters. Rebuild a matter's index with `POST /projects/:id/reindex`.
+- **Citation guard** — in Agent mode, document citations are verified by confirming the quoted text actually appears in the cited source; unresolved citations are surfaced as "unverified" with a coverage-limits note, never presented as settled.
+- **Eval harness** — `cd backend && npm test` runs offline golden checks (limitation arithmetic incl. leap years, citation-guard resolution, RRF fusion, chunker boundaries); CI (`.github/workflows/ci.yml`) gates merges on them.
+
+**New migrations** (apply from `backend/oss-migrations/`): `20260614_document_chunks.sql`, `20260614_match_chunks.sql`, `20260614_agent_runs.sql`. Requires the `vector` extension (Supabase: enable `pgvector`).
+
+**Env:** embeddings use `OPENAI_API_KEY` (default `text-embedding-3-small`, 1536-dim) or `GEMINI_API_KEY`; set `EMBEDDING_MODEL`/`EMBEDDING_DIM` to change (the dim must match the `document_chunks.embedding` column). Optional reranking via `RERANK_API_KEY` (Cohere-style; `RERANK_URL`/`RERANK_MODEL` to override). Validate the full loop locally with `npm run smoke:agent -- <projectId>`.
 
 ---
 

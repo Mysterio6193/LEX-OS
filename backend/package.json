@@ -2,10 +2,15 @@
   "name": "lex-os-backend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "tsx src/eval/run.ts",
+    "smoke:agent": "tsx scripts/smoke-agent.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

@@ -19,6 +19,14 @@ import type {
     ProjectDeadline,
     ProjectHearing,
     ProjectMemory,
+    BillingSettings,
+    TimeEntry,
+    Invoice,
+    InvoiceLineItem,
+    Vault,
+    AgentWorkflow,
+    AgentWorkflowStep,
+    AgentWorkflowToolOption,
     MatterTemplate,
     ProjectParty,
     ProjectTask,
@@ -621,6 +629,242 @@ export async function deleteProjectHearing(
     });
 }
 
+// --- Billing: firm settings, time entries, GST invoices ---
+
+export async function getBillingSettings(): Promise<BillingSettings> {
+    if (isDemoMode) return mockApi.getBillingSettings();
+    return apiRequest<BillingSettings>(`/billing/settings`);
+}
+
+export async function updateBillingSettings(body: {
+    firm_gstin?: string | null;
+    firm_state?: string | null;
+    default_hourly_rate?: number | null;
+}): Promise<BillingSettings> {
+    if (isDemoMode) return mockApi.updateBillingSettings(body);
+    return apiRequest<BillingSettings>(`/billing/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function listTimeEntries(
+    projectId: string,
+): Promise<TimeEntry[]> {
+    if (isDemoMode) return mockApi.listTimeEntries(projectId);
+    return apiRequest<TimeEntry[]>(
+        `/projects/${projectId}/billing/time-entries`,
+    );
+}
+
+export async function createTimeEntry(
+    projectId: string,
+    body: {
+        description: string;
+        minutes: number;
+        entry_date?: string;
+        rate?: number;
+    },
+): Promise<TimeEntry> {
+    if (isDemoMode) return mockApi.createTimeEntry(projectId, body);
+    return apiRequest<TimeEntry>(
+        `/projects/${projectId}/billing/time-entries`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function updateTimeEntry(
+    projectId: string,
+    entryId: string,
+    body: { description?: string; billed?: boolean },
+): Promise<TimeEntry> {
+    if (isDemoMode) return mockApi.updateTimeEntry(projectId, entryId, body);
+    return apiRequest<TimeEntry>(
+        `/projects/${projectId}/billing/time-entries/${entryId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        },
+    );
+}
+
+export async function deleteTimeEntry(
+    projectId: string,
+    entryId: string,
+): Promise<void> {
+    if (isDemoMode) return mockApi.deleteTimeEntry(projectId, entryId);
+    await apiRequest(
+        `/projects/${projectId}/billing/time-entries/${entryId}`,
+        { method: "DELETE" },
+    );
+}
+
+export async function listInvoices(projectId: string): Promise<Invoice[]> {
+    if (isDemoMode) return mockApi.listInvoices(projectId);
+    return apiRequest<Invoice[]>(`/projects/${projectId}/billing/invoices`);
+}
+
+export async function createInvoice(
+    projectId: string,
+    body: {
+        invoice_date?: string;
+        client_name?: string;
+        client_gstin?: string;
+        place_of_supply?: string;
+        time_entry_ids?: string[];
+        line_items?: InvoiceLineItem[];
+        notes?: string;
+    },
+): Promise<Invoice> {
+    if (isDemoMode) return mockApi.createInvoice(projectId, body);
+    return apiRequest<Invoice>(`/projects/${projectId}/billing/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateInvoiceStatus(
+    projectId: string,
+    invoiceId: string,
+    status: Invoice["status"],
+): Promise<Invoice> {
+    if (isDemoMode)
+        return mockApi.updateInvoiceStatus(projectId, invoiceId, status);
+    return apiRequest<Invoice>(
+        `/projects/${projectId}/billing/invoices/${invoiceId}`,
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+        },
+    );
+}
+
+// --- Matter Vault (document sets) ---
+
+export async function listVaults(projectId: string): Promise<Vault[]> {
+    if (isDemoMode) return mockApi.listVaults(projectId);
+    return apiRequest<Vault[]>(`/projects/${projectId}/vaults`);
+}
+
+export async function createVault(
+    projectId: string,
+    body: { name: string; description?: string },
+): Promise<Vault> {
+    if (isDemoMode) return mockApi.createVault(projectId, body);
+    return apiRequest<Vault>(`/projects/${projectId}/vaults`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function deleteVault(
+    projectId: string,
+    vaultId: string,
+): Promise<void> {
+    if (isDemoMode) return mockApi.deleteVault(projectId, vaultId);
+    await apiRequest(`/projects/${projectId}/vaults/${vaultId}`, {
+        method: "DELETE",
+    });
+}
+
+export async function getVaultDocuments(
+    projectId: string,
+    vaultId: string,
+): Promise<string[]> {
+    if (isDemoMode) return mockApi.getVaultDocuments(projectId, vaultId);
+    const r = await apiRequest<{ document_ids: string[] }>(
+        `/projects/${projectId}/vaults/${vaultId}/documents`,
+    );
+    return r.document_ids;
+}
+
+export async function setVaultDocuments(
+    projectId: string,
+    vaultId: string,
+    documentIds: string[],
+): Promise<string[]> {
+    if (isDemoMode)
+        return mockApi.setVaultDocuments(projectId, vaultId, documentIds);
+    const r = await apiRequest<{ document_ids: string[] }>(
+        `/projects/${projectId}/vaults/${vaultId}/documents`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ document_ids: documentIds }),
+        },
+    );
+    return r.document_ids;
+}
+
+export async function reindexVault(
+    projectId: string,
+    vaultId: string,
+): Promise<{ documents: number; indexed: number; chunks: number }> {
+    if (isDemoMode) return mockApi.reindexVault(projectId, vaultId);
+    return apiRequest(`/projects/${projectId}/vaults/${vaultId}/reindex`, {
+        method: "POST",
+    });
+}
+
+export async function listAgentWorkflows(): Promise<AgentWorkflow[]> {
+    if (isDemoMode) return mockApi.listAgentWorkflows();
+    return apiRequest<AgentWorkflow[]>(`/agent-workflows`);
+}
+
+export async function listAgentWorkflowTools(): Promise<
+    AgentWorkflowToolOption[]
+> {
+    if (isDemoMode) return mockApi.listAgentWorkflowTools();
+    return apiRequest<AgentWorkflowToolOption[]>(`/agent-workflows/tools`);
+}
+
+export async function createAgentWorkflow(body: {
+    name: string;
+    description?: string;
+    practice?: string;
+    steps: AgentWorkflowStep[];
+    is_shared?: boolean;
+}): Promise<AgentWorkflow> {
+    if (isDemoMode) return mockApi.createAgentWorkflow(body);
+    return apiRequest<AgentWorkflow>(`/agent-workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function updateAgentWorkflow(
+    id: string,
+    body: {
+        name?: string;
+        description?: string | null;
+        practice?: string | null;
+        steps?: AgentWorkflowStep[];
+        is_shared?: boolean;
+    },
+): Promise<AgentWorkflow> {
+    if (isDemoMode) return mockApi.updateAgentWorkflow(id, body);
+    return apiRequest<AgentWorkflow>(`/agent-workflows/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+}
+
+export async function deleteAgentWorkflow(id: string): Promise<void> {
+    if (isDemoMode) return mockApi.deleteAgentWorkflow(id);
+    await apiRequest(`/agent-workflows/${id}`, { method: "DELETE" });
+}
+
 export async function listProjectParties(
     projectId: string,
 ): Promise<ProjectParty[]> {
@@ -1192,6 +1436,8 @@ export async function streamProjectChat(payload: {
     model?: string;
     displayed_doc?: { filename: string; document_id: string };
     attached_documents?: { filename: string; document_id: string }[];
+    agent?: boolean;
+    agent_workflow_id?: string;
     signal?: AbortSignal;
 }): Promise<Response> {
     if (isDemoMode) return mockApi.streamProjectChat(payload);
@@ -1735,6 +1981,51 @@ const DEFAULT_PROJECT_HEARINGS: ProjectHearing[] = [
         updated_at: new Date().toISOString(),
     }
 ];
+
+const DEFAULT_BILLING_SETTINGS: BillingSettings = {
+    firm_gstin: "07ABCDE1234F1Z5",
+    firm_state: "Delhi",
+    default_hourly_rate: 5000,
+};
+
+const DEFAULT_TIME_ENTRIES: TimeEntry[] = [
+    {
+        id: "te-1",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        entry_date: new Date(Date.now() - 2 * 24 * 3600 * 1000)
+            .toISOString()
+            .slice(0, 10),
+        description: "Reviewed petition record and prepared written submissions",
+        minutes: 150,
+        rate: 5000,
+        amount: 12500,
+        billed: false,
+        source: "user",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+    {
+        id: "te-2",
+        project_id: "proj-1",
+        user_id: "demo-user-id",
+        entry_date: new Date(Date.now() - 1 * 24 * 3600 * 1000)
+            .toISOString()
+            .slice(0, 10),
+        description: "Client conference and strategy note",
+        minutes: 60,
+        rate: 5000,
+        amount: 5000,
+        billed: false,
+        source: "assistant",
+        source_chat_id: null,
+        created_at: new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+    },
+];
+
+const DEFAULT_INVOICES: Invoice[] = [];
 
 const DEFAULT_PROJECT_PARTIES: ProjectParty[] = [
     {
@@ -3944,5 +4235,459 @@ const mockApi = {
             added: addedTasks.length,
             tasks: addedTasks,
         };
+    },
+
+    // --- Billing (India GST) ---
+
+    getBillingSettings: async (): Promise<BillingSettings> => {
+        await delay(50);
+        return getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+    },
+
+    updateBillingSettings: async (body: {
+        firm_gstin?: string | null;
+        firm_state?: string | null;
+        default_hourly_rate?: number | null;
+    }): Promise<BillingSettings> => {
+        await delay(100);
+        const current = getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+        const updated: BillingSettings = { ...current, ...body };
+        setLocalStorage("lexos_billing_settings", updated);
+        return updated;
+    },
+
+    listTimeEntries: async (projectId: string): Promise<TimeEntry[]> => {
+        await delay(50);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        return entries.filter((e) => e.project_id === projectId);
+    },
+
+    createTimeEntry: async (
+        projectId: string,
+        body: {
+            description: string;
+            minutes: number;
+            entry_date?: string;
+            rate?: number;
+        },
+    ): Promise<TimeEntry> => {
+        await delay(100);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        const settings = getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+        const rate = body.rate ?? settings.default_hourly_rate ?? 0;
+        const amount =
+            Math.round(((body.minutes / 60) * rate + Number.EPSILON) * 100) /
+            100;
+        const newEntry: TimeEntry = {
+            id: `te-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            entry_date:
+                body.entry_date || new Date().toISOString().slice(0, 10),
+            description: body.description,
+            minutes: body.minutes,
+            rate,
+            amount,
+            billed: false,
+            source: "user",
+            source_chat_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        entries.push(newEntry);
+        setLocalStorage("lexos_time_entries", entries);
+        return newEntry;
+    },
+
+    updateTimeEntry: async (
+        projectId: string,
+        entryId: string,
+        body: { description?: string; billed?: boolean },
+    ): Promise<TimeEntry> => {
+        await delay(100);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        const idx = entries.findIndex((e) => e.id === entryId);
+        if (idx === -1) throw new Error("Time entry not found");
+        entries[idx] = {
+            ...entries[idx],
+            ...body,
+            updated_at: new Date().toISOString(),
+        };
+        setLocalStorage("lexos_time_entries", entries);
+        return entries[idx];
+    },
+
+    deleteTimeEntry: async (
+        projectId: string,
+        entryId: string,
+    ): Promise<void> => {
+        await delay(100);
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        setLocalStorage(
+            "lexos_time_entries",
+            entries.filter((e) => e.id !== entryId),
+        );
+    },
+
+    listInvoices: async (projectId: string): Promise<Invoice[]> => {
+        await delay(50);
+        const invoices = getLocalStorage<Invoice[]>(
+            "lexos_invoices",
+            DEFAULT_INVOICES,
+        );
+        return invoices.filter((i) => i.project_id === projectId);
+    },
+
+    createInvoice: async (
+        projectId: string,
+        body: {
+            invoice_date?: string;
+            client_name?: string;
+            client_gstin?: string;
+            place_of_supply?: string;
+            time_entry_ids?: string[];
+            line_items?: InvoiceLineItem[];
+            notes?: string;
+        },
+    ): Promise<Invoice> => {
+        await delay(150);
+        const round2 = (n: number) =>
+            Math.round((n + Number.EPSILON) * 100) / 100;
+        const entries = getLocalStorage<TimeEntry[]>(
+            "lexos_time_entries",
+            DEFAULT_TIME_ENTRIES,
+        );
+        const settings = getLocalStorage<BillingSettings>(
+            "lexos_billing_settings",
+            DEFAULT_BILLING_SETTINGS,
+        );
+        const lineItems: InvoiceLineItem[] = [...(body.line_items ?? [])];
+        const ids = body.time_entry_ids ?? [];
+        for (const e of entries.filter((e) => ids.includes(e.id))) {
+            const hrs = e.minutes > 0 ? `${(e.minutes / 60).toFixed(2)} hrs` : "";
+            lineItems.push({
+                description: [e.entry_date, e.description, hrs]
+                    .filter(Boolean)
+                    .join(" — "),
+                amount: round2(e.amount),
+            });
+        }
+        const subtotal = round2(
+            lineItems.reduce((s, li) => s + (Number(li.amount) || 0), 0),
+        );
+        const place = body.place_of_supply?.trim() || null;
+        const intra =
+            !!place &&
+            !!settings.firm_state &&
+            place.toLowerCase() === settings.firm_state.toLowerCase();
+        const cgst = intra ? round2(subtotal * 0.09) : 0;
+        const sgst = intra ? round2(subtotal * 0.09) : 0;
+        const igst = intra ? 0 : round2(subtotal * 0.18);
+        const total = round2(subtotal + cgst + sgst + igst);
+        const invoices = getLocalStorage<Invoice[]>(
+            "lexos_invoices",
+            DEFAULT_INVOICES,
+        );
+        const newInvoice: Invoice = {
+            id: `inv-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            invoice_number: `INV-${String(invoices.length + 1).padStart(4, "0")}`,
+            invoice_date:
+                body.invoice_date || new Date().toISOString().slice(0, 10),
+            client_name: body.client_name?.trim() || null,
+            client_gstin: body.client_gstin?.trim() || null,
+            place_of_supply: place,
+            sac_code: "9982",
+            line_items: lineItems,
+            subtotal,
+            cgst,
+            sgst,
+            igst,
+            total,
+            status: "draft",
+            notes: body.notes?.trim() || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        invoices.push(newInvoice);
+        setLocalStorage("lexos_invoices", invoices);
+        // Mark consumed entries billed.
+        if (ids.length) {
+            const all = entries.map((e) =>
+                ids.includes(e.id) ? { ...e, billed: true } : e,
+            );
+            setLocalStorage("lexos_time_entries", all);
+        }
+        return newInvoice;
+    },
+
+    updateInvoiceStatus: async (
+        projectId: string,
+        invoiceId: string,
+        status: Invoice["status"],
+    ): Promise<Invoice> => {
+        await delay(100);
+        const invoices = getLocalStorage<Invoice[]>(
+            "lexos_invoices",
+            DEFAULT_INVOICES,
+        );
+        const idx = invoices.findIndex((i) => i.id === invoiceId);
+        if (idx === -1) throw new Error("Invoice not found");
+        invoices[idx] = {
+            ...invoices[idx],
+            status,
+            updated_at: new Date().toISOString(),
+        };
+        setLocalStorage("lexos_invoices", invoices);
+        return invoices[idx];
+    },
+
+    // --- Matter Vault (demo) ---
+
+    listVaults: async (projectId: string): Promise<Vault[]> => {
+        await delay(50);
+        const vaults = getLocalStorage<Vault[]>("lexos_vaults", []);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        return vaults
+            .filter((v) => v.project_id === projectId)
+            .map((v) => ({
+                ...v,
+                document_count: (members[v.id] ?? []).length,
+            }));
+    },
+
+    createVault: async (
+        projectId: string,
+        body: { name: string; description?: string },
+    ): Promise<Vault> => {
+        await delay(100);
+        const vaults = getLocalStorage<Vault[]>("lexos_vaults", []);
+        const vault: Vault = {
+            id: `vault-${Date.now()}`,
+            project_id: projectId,
+            user_id: "demo-user-id",
+            name: body.name,
+            description: body.description || null,
+            document_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        };
+        vaults.push(vault);
+        setLocalStorage("lexos_vaults", vaults);
+        return vault;
+    },
+
+    deleteVault: async (projectId: string, vaultId: string): Promise<void> => {
+        await delay(100);
+        const vaults = getLocalStorage<Vault[]>("lexos_vaults", []);
+        setLocalStorage(
+            "lexos_vaults",
+            vaults.filter((v) => v.id !== vaultId),
+        );
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        delete members[vaultId];
+        setLocalStorage("lexos_vault_docs", members);
+    },
+
+    getVaultDocuments: async (
+        projectId: string,
+        vaultId: string,
+    ): Promise<string[]> => {
+        await delay(50);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        return members[vaultId] ?? [];
+    },
+
+    setVaultDocuments: async (
+        projectId: string,
+        vaultId: string,
+        documentIds: string[],
+    ): Promise<string[]> => {
+        await delay(100);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        members[vaultId] = documentIds;
+        setLocalStorage("lexos_vault_docs", members);
+        return documentIds;
+    },
+
+    reindexVault: async (
+        projectId: string,
+        vaultId: string,
+    ): Promise<{ documents: number; indexed: number; chunks: number }> => {
+        await delay(200);
+        const members = getLocalStorage<Record<string, string[]>>(
+            "lexos_vault_docs",
+            {},
+        );
+        const n = (members[vaultId] ?? []).length;
+        return { documents: n, indexed: n, chunks: n * 12 };
+    },
+
+    listAgentWorkflows: async (): Promise<AgentWorkflow[]> => {
+        await delay(50);
+        return [
+            {
+                id: "wf-s138-kit",
+                name: "Cheque Dishonour (S.138 NI Act) kit",
+                description:
+                    "Conflicts, parties, limitation, notice, and complaint draft for a S.138 matter.",
+                practice: "Criminal / NI Act",
+                step_count: 7,
+                steps: [],
+            },
+            {
+                id: "wf-bail-bnss",
+                name: "Bail Application (BNSS) kit",
+                description:
+                    "Conflicts, FIR facts, precedents, draft, and next hearing for a bail matter.",
+                practice: "Criminal",
+                step_count: 6,
+                steps: [],
+            },
+            {
+                id: "wf-writ-226",
+                name: "Writ Petition (Art. 226/32)",
+                description:
+                    "Conflicts, right infringed and alternate-remedy check, precedents, petition + synopsis.",
+                practice: "Constitutional",
+                step_count: 5,
+                steps: [],
+            },
+            {
+                id: "wf-contract-diligence",
+                name: "Contract review / diligence",
+                description:
+                    "Extract key clauses, compare to firm precedents, flag risks, draft a note.",
+                practice: "Transactional",
+                step_count: 5,
+                steps: [],
+            },
+            ...getLocalStorage<AgentWorkflow[]>("lexos_agent_workflows", []),
+        ];
+    },
+
+    listAgentWorkflowTools: async (): Promise<AgentWorkflowToolOption[]> => {
+        await delay(30);
+        return [
+            { name: "retrieve_context", scope: "project", accuracy_critical: false, description: "Search matter documents." },
+            { name: "check_conflicts", scope: "project", accuracy_critical: true, description: "Conflict check across matters." },
+            { name: "compute_limitation", scope: "project", accuracy_critical: true, description: "Compute Indian limitation dates." },
+            { name: "save_deadline", scope: "project", accuracy_critical: false, description: "Save a deadline." },
+            { name: "save_task", scope: "project", accuracy_critical: false, description: "Add a checklist task." },
+            { name: "save_party", scope: "project", accuracy_critical: false, description: "Record a party." },
+            { name: "generate_docx", scope: "global", accuracy_critical: false, description: "Draft a document." },
+            { name: "indiankanoon_search_case_law", scope: "research", accuracy_critical: true, description: "Search Indian case law." },
+            { name: "search_firm_knowledge", scope: "project", accuracy_critical: false, description: "Search across all matters." },
+        ];
+    },
+
+    createAgentWorkflow: async (body: {
+        name: string;
+        description?: string;
+        practice?: string;
+        steps: AgentWorkflowStep[];
+        is_shared?: boolean;
+    }): Promise<AgentWorkflow> => {
+        await delay(100);
+        const list = getLocalStorage<AgentWorkflow[]>(
+            "lexos_agent_workflows",
+            [],
+        );
+        const wf: AgentWorkflow = {
+            id: `wf-custom-${Date.now()}`,
+            name: body.name,
+            description: body.description || "",
+            practice: body.practice || "Custom",
+            step_count: body.steps.length,
+            steps: body.steps,
+            is_custom: true,
+            is_shared: !!body.is_shared,
+        };
+        list.push(wf);
+        setLocalStorage("lexos_agent_workflows", list);
+        return wf;
+    },
+
+    updateAgentWorkflow: async (
+        id: string,
+        body: {
+            name?: string;
+            description?: string | null;
+            practice?: string | null;
+            steps?: AgentWorkflowStep[];
+            is_shared?: boolean;
+        },
+    ): Promise<AgentWorkflow> => {
+        await delay(100);
+        const list = getLocalStorage<AgentWorkflow[]>(
+            "lexos_agent_workflows",
+            [],
+        );
+        const idx = list.findIndex((w) => w.id === id);
+        if (idx === -1) throw new Error("Workflow not found");
+        list[idx] = {
+            ...list[idx],
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.description !== undefined
+                ? { description: body.description || "" }
+                : {}),
+            ...(body.practice !== undefined
+                ? { practice: body.practice || "Custom" }
+                : {}),
+            ...(body.steps !== undefined
+                ? { steps: body.steps, step_count: body.steps.length }
+                : {}),
+            ...(body.is_shared !== undefined
+                ? { is_shared: body.is_shared }
+                : {}),
+        };
+        setLocalStorage("lexos_agent_workflows", list);
+        return list[idx];
+    },
+
+    deleteAgentWorkflow: async (id: string): Promise<void> => {
+        await delay(100);
+        const list = getLocalStorage<AgentWorkflow[]>(
+            "lexos_agent_workflows",
+            [],
+        );
+        setLocalStorage(
+            "lexos_agent_workflows",
+            list.filter((w) => w.id !== id),
+        );
     }
 };

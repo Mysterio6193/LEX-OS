@@ -31,7 +31,9 @@ export type ProjectTab =
     | "hearings"
     | "parties"
     | "timeline"
-    | "tasks";
+    | "tasks"
+    | "billing"
+    | "vaults";
 
 export type ProjectContextMenu = {
     x: number;

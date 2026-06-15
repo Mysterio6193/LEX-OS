@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Briefcase,
     CalendarClock,
+    ChevronDown,
     FileSignature,
+    FileText,
     Gavel,
     History,
     ListChecks,
@@ -32,6 +34,51 @@ import type {
 import type { ProjectTab } from "./ProjectPageParts";
 
 const SECTION_LIMIT = 5;
+
+// One-click Indian document drafting. Each seeds a chat prompt; the
+// assistant drafts via generate_docx using the matter's context.
+const INDIA_DOCUMENTS: { label: string; prompt: string }[] = [
+    {
+        label: "Vakalatnama",
+        prompt: "Draft a vakalatnama for this matter using the court/forum and parties on record. Leave clearly marked placeholders for the advocate's name, enrolment number, and any missing details.",
+    },
+    {
+        label: "Legal notice",
+        prompt: "Draft a legal notice for this matter. Use the parties and facts on record, follow Indian format (sender/recipient, facts, demand, time to comply, consequences), and leave clearly marked placeholders for anything missing.",
+    },
+    {
+        label: "Legal notice — S.138 NI Act (cheque)",
+        prompt: "Draft a statutory demand notice under Section 138 of the Negotiable Instruments Act for this matter — recite the cheque particulars, dishonour, and the 15-day demand — using the parties on record, with clearly marked placeholders for missing cheque/return-memo details.",
+    },
+    {
+        label: "Legal notice — S.80 CPC",
+        prompt: "Draft a notice under Section 80 CPC for this matter (suit against the government/public officer), using the parties and facts on record, with clearly marked placeholders for missing details.",
+    },
+    {
+        label: "Plaint",
+        prompt: "Draft a plaint for this matter following Indian CPC format: cause title with the court/forum and parties, numbered paragraphs of facts, cause of action, jurisdiction and valuation, the prayer, and a verification clause. Use matter context; leave clearly marked placeholders for missing details.",
+    },
+    {
+        label: "Written statement",
+        prompt: "Draft a written statement for this matter following Indian format: cause title, para-wise reply, preliminary objections, and verification. Use matter context; leave clearly marked placeholders for missing details.",
+    },
+    {
+        label: "Bail application",
+        prompt: "Draft a bail application for this matter following Indian format (cause title, grounds, prayer, verification), using the parties and facts on record, with clearly marked placeholders for the FIR number, sections, and missing details.",
+    },
+    {
+        label: "Writ petition",
+        prompt: "Draft a writ petition (Art. 226/32) for this matter: cause title with the court and parties, grounds, the prayer, and verification/affidavit. Use matter context; leave clearly marked placeholders for missing details.",
+    },
+    {
+        label: "Affidavit",
+        prompt: "Draft an affidavit for this matter following Indian format (deponent details, numbered averments, verification with place and date), using matter context, with clearly marked placeholders for missing details.",
+    },
+    {
+        label: "Reply to legal notice",
+        prompt: "Draft a reply to a legal notice for this matter, responding para-wise and asserting our position, using the parties and facts on record, with clearly marked placeholders for missing details.",
+    },
+];
 
 function todayIso(): string {
     return new Date().toISOString().slice(0, 10);
@@ -95,12 +142,30 @@ export function ProjectOverviewTab({
     project,
     onNavigate,
     onDraftStatusReport,
+    onDraftDocument,
 }: {
     projectId: string;
     project: Project | null;
     onNavigate: (tab: ProjectTab) => void;
     onDraftStatusReport: () => void;
+    onDraftDocument: (prompt: string) => void;
 }) {
+    const [docMenuOpen, setDocMenuOpen] = useState(false);
+    const docMenuRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!docMenuOpen) return;
+        function onClick(e: MouseEvent) {
+            if (
+                docMenuRef.current &&
+                !docMenuRef.current.contains(e.target as Node)
+            ) {
+                setDocMenuOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", onClick);
+        return () => document.removeEventListener("mousedown", onClick);
+    }, [docMenuOpen]);
     const [parties, setParties] = useState<ProjectParty[]>([]);
     const [deadlines, setDeadlines] = useState<ProjectDeadline[]>([]);
     const [hearings, setHearings] = useState<ProjectHearing[]>([]);
@@ -169,13 +234,41 @@ export function ProjectOverviewTab({
                     <h2 className="text-lg font-bold text-gray-900">Matter Overview</h2>
                     <p className="text-xs text-gray-500">Key info, status, deadlines, and activity at a glance.</p>
                 </div>
-                <button
-                    onClick={onDraftStatusReport}
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/50 px-4 text-xs font-semibold text-blue-700 transition-all hover:bg-blue-100 hover:text-blue-800 shadow-sm"
-                >
-                    <FileSignature className="h-3.5 w-3.5 text-blue-600" />
-                    Draft status report
-                </button>
+                <div className="flex items-center gap-2">
+                    <div className="relative" ref={docMenuRef}>
+                        <button
+                            onClick={() => setDocMenuOpen((v) => !v)}
+                            className="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-700 transition-all hover:border-gray-400 shadow-sm"
+                        >
+                            <FileText className="h-3.5 w-3.5 text-gray-500" />
+                            Draft document
+                            <ChevronDown className="h-3 w-3" />
+                        </button>
+                        {docMenuOpen && (
+                            <div className="absolute right-0 top-10 z-[70] w-64 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                                {INDIA_DOCUMENTS.map((doc) => (
+                                    <button
+                                        key={doc.label}
+                                        onClick={() => {
+                                            setDocMenuOpen(false);
+                                            onDraftDocument(doc.prompt);
+                                        }}
+                                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                        {doc.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={onDraftStatusReport}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/50 px-4 text-xs font-semibold text-blue-700 transition-all hover:bg-blue-100 hover:text-blue-800 shadow-sm"
+                    >
+                        <FileSignature className="h-3.5 w-3.5 text-blue-600" />
+                        Draft status report
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
