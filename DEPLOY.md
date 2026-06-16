@@ -42,17 +42,19 @@ graceful shutdown and serverless platforms via `export default app`
 (`VERCEL=1` skips `app.listen`).
 
 ## 4. Frontend (Vercel)
-The frontend is a Next.js app in `frontend/`; the backend is hosted
-separately (§3) and reached via `NEXT_PUBLIC_API_BASE_URL`.
+The frontend is a Next.js app in `frontend/` with SSR/dynamic routes, so it
+must deploy with Vercel's Next.js framework integration. The backend is
+hosted separately (§3) and reached via `NEXT_PUBLIC_API_BASE_URL`.
 
-**Vercel — two equivalent options:**
-- **Simplest:** import the repo as-is. The root `vercel.json` installs and
-  builds from `frontend/` and serves `frontend/.next` — no dashboard change
-  needed. (Note: the root `vercel.json` must NOT use `experimentalServices`;
-  that is not a real Vercel schema and was the cause of failed deploys.)
-- **Cleaner:** in the Vercel project settings set **Root Directory =
-  `frontend`** (then the root `vercel.json` is unused and Vercel auto-detects
-  Next.js).
+**Required setup (one-time):** In the Vercel project →
+Settings → Build & Deployment → **Root Directory = `frontend`**, then
+redeploy. This is mandatory for a Next app in a monorepo subdirectory — a
+root-level `vercel.json` build override cannot correctly deploy the SSR
+routes, which is why earlier deploys failed. With Root Directory set, Vercel
+auto-detects Next.js and uses `frontend/vercel.json`.
+
+> Do NOT put a `vercel.json` at the repo root for this app, and never use an
+> `experimentalServices` key (not a real Vercel schema).
 
 **Required env vars (Vercel project → Settings → Environment Variables):**
 ```
@@ -62,8 +64,8 @@ NEXT_PUBLIC_API_BASE_URL=https://<your-backend-host>
 # Optional: ship a backend-free trial build
 NEXT_PUBLIC_DEMO_MODE=false
 ```
-Demo Mode (`NEXT_PUBLIC_DEMO_MODE=true`) runs fully client-side with no
-backend — useful for trials, not production.
+With no Supabase env set, the app falls back to Demo Mode (client-side,
+localStorage) — useful for trials, not production.
 
 `frontend/package.json` also carries Cloudflare (`opennextjs-cloudflare`)
 scripts and an `open-next.config.ts`; those are unused by Vercel and can be

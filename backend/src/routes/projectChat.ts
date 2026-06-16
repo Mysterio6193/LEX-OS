@@ -91,7 +91,10 @@ CITATION INTEGRITY:
 Every citation must be backed by text you actually retrieved and read this turn (a document you read, or a judgment you fetched and read). Quote verbatim from that source in the <CITATIONS> block. Never cite from memory, a filename, search-result snippets, or a citation-verification result alone. If you cannot ground a proposition in a retrieved source, say so plainly and mark it unverified rather than citing. Citation coverage is limited to sources retrieved this turn — do not imply completeness the sources don't have.
 
 DEEP RESEARCH:
-When asked to research a legal question or produce a research memo, work in steps: frame the precise issue(s) and jurisdiction; search and read the leading authorities (verify citations and read the judgment text before relying on it); then synthesise a structured memo — Issue, Rule, Authorities, Application, Conclusion. For each authority state its treatment (followed / distinguished / overruled / doubted) where the read text shows it, and prefer binding, current, good law (Supreme Court over High Court; flag anything you cannot confirm is still good law). Cite only judgments you fetched and read this turn, and end with a coverage-limits note (the search source may not include very recent or unreported judgments — the advocate must verify). Offer to save the memo via generate_docx.`;
+When asked to research a legal question or produce a research memo, work in steps: frame the precise issue(s) and jurisdiction; search and read the leading authorities (verify citations and read the judgment text before relying on it); then synthesise a structured memo — Issue, Rule, Authorities, Application, Conclusion. For each authority state its treatment (followed / distinguished / overruled / doubted) where the read text shows it, and prefer binding, current, good law (Supreme Court over High Court; flag anything you cannot confirm is still good law). Cite only judgments you fetched and read this turn, and end with a coverage-limits note (the search source may not include very recent or unreported judgments — the advocate must verify). Offer to save the memo via generate_docx.
+
+LANGUAGE:
+This is an Indian practice serving clients across many languages. Mirror the user's language: if they write in Hindi or a regional language, reply in that language and script. When OUTPUT LANGUAGE is set, follow it for this turn. For client-facing material (status updates, notices to the client, explanations), offer a bilingual result — the formal/legal document in the language of filing, plus a plain-language summary in the client's language. Always keep statutory references, section numbers, citations, and party names accurate; do not let translation change legal meaning.`;
 
 export const projectChatRouter = Router({ mergeParams: true });
 
@@ -108,6 +111,7 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         attached_documents,
         agent: agentMode,
         agent_workflow_id: agentWorkflowId,
+        language,
     } = req.body as {
         messages: ChatMessage[];
         chat_id?: string;
@@ -118,6 +122,8 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         agent?: boolean;
         /** Optional: seed the agent plan from a library workflow. */
         agent_workflow_id?: string;
+        /** Optional: respond / draft in this language for this turn. */
+        language?: string;
     };
 
     const db = createServerSupabase();
@@ -240,6 +246,13 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
             return slug ? `- ${slug}: ${d.filename}` : `- ${d.filename}`;
         });
         systemPromptExtra += `\n\nUSER-ATTACHED DOCUMENTS FOR THIS TURN:\nThe user has attached the following document(s) directly to their latest message. Treat these as the primary focus of the request unless their message clearly says otherwise.\n${lines.join("\n")}`;
+    }
+
+    // Per-turn output language (vernacular). "auto"/"english" leave default
+    // behaviour; any other value forces the reply into that language.
+    const lang = (language ?? "").trim();
+    if (lang && lang.toLowerCase() !== "auto" && lang.toLowerCase() !== "english") {
+        systemPromptExtra += `\n\nOUTPUT LANGUAGE:\nRespond to this turn in ${lang}, using the correct script. For any client-facing document you draft, append a clear ${lang} summary after the document. Keep statutory names, section numbers, case citations, party names, and defined legal terms accurate (transliterate or keep in English where that is the accepted legal usage); never alter the meaning of legal text for the sake of translation.`;
     }
 
     const {

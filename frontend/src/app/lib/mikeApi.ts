@@ -1438,6 +1438,7 @@ export async function streamProjectChat(payload: {
     attached_documents?: { filename: string; document_id: string }[];
     agent?: boolean;
     agent_workflow_id?: string;
+    language?: string;
     signal?: AbortSignal;
 }): Promise<Response> {
     if (isDemoMode) return mockApi.streamProjectChat(payload);

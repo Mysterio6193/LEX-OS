@@ -222,6 +222,8 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     const [agentMode, setAgentMode] = useState(false);
     const [agentWorkflows, setAgentWorkflows] = useState<AgentWorkflow[]>([]);
     const [builderOpen, setBuilderOpen] = useState(false);
+    // Per-turn output language (vernacular). "Auto" mirrors the user.
+    const [language, setLanguage] = useState("Auto");
 
     const reloadWorkflows = useCallback(() => {
         listAgentWorkflows()
@@ -502,16 +504,19 @@ export default function ProjectAssistantChatPage({ params }: Props) {
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleSubmit = useCallback(
         (message: Message) => {
-            if (!activeTab) return handleChat(message, { agent: agentMode });
+            const lang = language !== "Auto" ? language : undefined;
+            if (!activeTab)
+                return handleChat(message, { agent: agentMode, language: lang });
             return handleChat(message, {
                 agent: agentMode,
+                language: lang,
                 displayedDoc: {
                     filename: activeTab.filename,
                     documentId: activeTab.documentId,
                 },
             });
         },
-        [activeTab, handleChat, agentMode],
+        [activeTab, handleChat, agentMode, language],
     );
 
     const handleDocClick = (doc: Document) => {
@@ -1280,6 +1285,10 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                                             {
                                                 agent: true,
                                                 agentWorkflowId: wf.id,
+                                                language:
+                                                    language !== "Auto"
+                                                        ? language
+                                                        : undefined,
                                             },
                                         );
                                     }}
@@ -1294,6 +1303,30 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                                     ))}
                                 </select>
                             )}
+                            <select
+                                value={language}
+                                onChange={(e) => setLanguage(e.target.value)}
+                                title="Reply / draft in this language (with a client-language summary for documents)."
+                                className="h-7 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 outline-none hover:border-gray-400"
+                            >
+                                {[
+                                    "Auto",
+                                    "English",
+                                    "Hindi",
+                                    "Bengali",
+                                    "Marathi",
+                                    "Telugu",
+                                    "Tamil",
+                                    "Gujarati",
+                                    "Kannada",
+                                    "Malayalam",
+                                    "Punjabi",
+                                ].map((l) => (
+                                    <option key={l} value={l}>
+                                        {l === "Auto" ? "Language: Auto" : l}
+                                    </option>
+                                ))}
+                            </select>
                             <button
                                 type="button"
                                 onClick={() => setBuilderOpen(true)}
